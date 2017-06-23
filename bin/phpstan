@@ -6,11 +6,6 @@ use PHPStan\FileHelper;
 
 gc_disable(); // performance boost
 
-$autoloaderInWorkingDirectory = getcwd() . '/vendor/autoload.php';
-if (is_file($autoloaderInWorkingDirectory)) {
-	require_once($autoloaderInWorkingDirectory);
-}
-
 if (!class_exists('PHPStan\Command\AnalyseCommand', true)) {
 	$composerAutoloadFile = __DIR__ . '/../vendor/autoload.php';
 	if (!is_file($composerAutoloadFile)) {
