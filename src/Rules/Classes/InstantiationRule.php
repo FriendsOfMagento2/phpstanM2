@@ -110,6 +110,10 @@ class InstantiationRule implements \PHPStan\Rules\Rule
 			return [];
 		}
 
+		if ($node->getAttribute('__skip_construct_test__')) {
+			return [];
+		}
+
 		return $this->check->check(
 			$classReflection->hasMethod('__construct') ? $classReflection->getMethod('__construct', $scope) : $classReflection->getMethod($class),
 			$scope,
