@@ -43,26 +43,33 @@ class DirectParser implements Parser
 			throw new \PHPStan\ShouldNotHappenException();
 		}
 
+		$autoAssignVariables = [
+			'block',
+			'this',
+		];
+
 		$nodes = $this->traverser->traverse($nodes);
 
-		if ($nodes && $nodes[0] instanceof \PhpParser\Node\Stmt\Nop) {
+		$addedNodes = [];
+		foreach ($nodes as $node) {
+			foreach ($node->getAttribute('comments', []) as $comment) {
+				if (preg_match_all('/@var\s+([A-Za-z0-9\\\]+)\s+\$(' . implode('|', $autoAssignVariables) . ')/im', $comment->getText(), $matches)) {
+					foreach ($matches[2] as $index => $variable) {
+						if (!isset($addedNodes[$variable])) {
+							$addedNodes[$variable] = true;
+							$className = trim($matches[1][$index]);
 
-			$autoAssignVariables = [
-				'block',
-				'this',
-			];
-
-			foreach ($nodes[0]->getAttribute('comments', []) as $comment) {
-				if (preg_match('/@var\s+([A-Za-z0-9\\\]+)\s+\$(' . implode('|', $autoAssignVariables) . ')/im', $comment->getText(), $matches)) {
-					$assign = new \PhpParser\Node\Expr\Assign(
-						new \PhpParser\Node\Expr\Variable($matches[2]),
-						new \PhpParser\Node\Expr\New_(
-							new \PhpParser\Node\Name\FullyQualified(trim($matches[1], '\\')),
-							[],
-							['__skip_construct_test__' => true]
-						)
-					);
-					array_unshift($nodes, $assign);
+							$assign = new \PhpParser\Node\Expr\Assign(
+								new \PhpParser\Node\Expr\Variable($variable),
+								new \PhpParser\Node\Expr\New_(
+									new \PhpParser\Node\Name\FullyQualified($className),
+									[],
+									['__skip_construct_test__' => true]
+								)
+							);
+							array_unshift($nodes, $assign);
+						}
+					}
 				}
 			}
 		}
