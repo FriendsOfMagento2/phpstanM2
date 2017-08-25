@@ -53,7 +53,7 @@ class ClassReflection
 	}
 
 	/**
-	 * @return bool|\PHPStan\Reflection\ClassReflection
+	 * @return false|\PHPStan\Reflection\ClassReflection
 	 */
 	public function getParentClass()
 	{
@@ -194,6 +194,16 @@ class ClassReflection
 		return array_map(function (\ReflectionClass $interface) {
 			return $this->broker->getClass($interface->getName());
 		}, $this->getNativeReflection()->getInterfaces());
+	}
+
+	/**
+	 * @return \PHPStan\Reflection\ClassReflection[]
+	 */
+	public function getTraits(): array
+	{
+		return array_map(function (\ReflectionClass $trait) {
+			return $this->broker->getClass($trait->getName());
+		}, $this->getNativeReflection()->getTraits());
 	}
 
 	/**

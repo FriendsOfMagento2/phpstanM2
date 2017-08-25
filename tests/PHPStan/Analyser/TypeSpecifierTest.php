@@ -4,9 +4,13 @@ namespace PHPStan\Analyser;
 
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\BinaryOp\Equal;
+use PhpParser\Node\Expr\BinaryOp\Identical;
 use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\Expr\PropertyFetch;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Name;
+use PHPStan\TrinaryLogic;
 use PHPStan\Type\ObjectType;
 
 class TypeSpecifierTest extends \PHPStan\TestCase
@@ -27,7 +31,7 @@ class TypeSpecifierTest extends \PHPStan\TestCase
 		$this->printer = new \PhpParser\PrettyPrinter\Standard();
 		$this->typeSpecifier = new TypeSpecifier($this->printer);
 		$this->scope = new Scope($broker, $this->printer, $this->typeSpecifier, '');
-		$this->scope = $this->scope->assignVariable('bar', new ObjectType('Bar'));
+		$this->scope = $this->scope->assignVariable('bar', new ObjectType('Bar'), TrinaryLogic::createYes());
 	}
 
 	/**
@@ -38,11 +42,11 @@ class TypeSpecifierTest extends \PHPStan\TestCase
 	 */
 	public function testCondition(Expr $expr, array $expectedPositiveResult, array $expectedNegatedResult)
 	{
-		$specifiedTypes = $this->typeSpecifier->specifyTypesInCondition(new SpecifiedTypes(), $this->scope, $expr);
+		$specifiedTypes = $this->typeSpecifier->specifyTypesInCondition($this->scope, $expr);
 		$actualResult = $this->toReadableResult($specifiedTypes);
 		$this->assertSame($expectedPositiveResult, $actualResult);
 
-		$specifiedTypes = $this->typeSpecifier->specifyTypesInCondition(new SpecifiedTypes(), $this->scope, $expr, true);
+		$specifiedTypes = $this->typeSpecifier->specifyTypesInCondition($this->scope, $expr, true);
 		$actualResult = $this->toReadableResult($specifiedTypes);
 		$this->assertSame($expectedNegatedResult, $actualResult);
 	}
@@ -139,6 +143,33 @@ class TypeSpecifierTest extends \PHPStan\TestCase
 			],
 
 			[
+				new PropertyFetch(new Variable('this'), 'foo'),
+				['$this->foo' => '~false|null'],
+				[],
+			],
+			[
+				new Expr\BinaryOp\BooleanAnd(
+					new PropertyFetch(new Variable('this'), 'foo'),
+					$this->createFunctionCall('random')
+				),
+				['$this->foo' => '~false|null'],
+				[],
+			],
+			[
+				new Expr\BinaryOp\BooleanOr(
+					new PropertyFetch(new Variable('this'), 'foo'),
+					$this->createFunctionCall('random')
+				),
+				[],
+				[],
+			],
+			[
+				new Expr\BooleanNot(new PropertyFetch(new Variable('this'), 'foo')),
+				[],
+				['$this->foo' => '~false|null'],
+			],
+
+			[
 				new Expr\BinaryOp\BooleanOr(
 					$this->createFunctionCall('is_int'),
 					$this->createFunctionCall('is_string')
@@ -164,6 +195,94 @@ class TypeSpecifierTest extends \PHPStan\TestCase
 				),
 				[],
 				['$foo' => '~int', '$bar' => '~string'],
+			],
+			[
+				new Expr\BinaryOp\BooleanAnd(
+					new Expr\BinaryOp\BooleanOr(
+						$this->createFunctionCall('is_int', 'foo'),
+						$this->createFunctionCall('is_string', 'foo')
+					),
+					$this->createFunctionCall('random')
+				),
+				['$foo' => 'int|string'],
+				[],
+			],
+			[
+				new Expr\BinaryOp\BooleanOr(
+					new Expr\BinaryOp\BooleanAnd(
+						$this->createFunctionCall('is_int', 'foo'),
+						$this->createFunctionCall('is_string', 'foo')
+					),
+					$this->createFunctionCall('random')
+				),
+				[],
+				[],
+			],
+			[
+				new Expr\BinaryOp\BooleanOr(
+					new Expr\BinaryOp\BooleanAnd(
+						$this->createFunctionCall('is_int', 'foo'),
+						$this->createFunctionCall('is_string', 'bar')
+					),
+					$this->createFunctionCall('random')
+				),
+				[],
+				[],
+			],
+			[
+				new Expr\BinaryOp\BooleanOr(
+					new Expr\BinaryOp\BooleanAnd(
+						new Expr\BooleanNot($this->createFunctionCall('is_int', 'foo')),
+						new Expr\BooleanNot($this->createFunctionCall('is_string', 'foo'))
+					),
+					$this->createFunctionCall('random')
+				),
+				[],
+				['$foo' => 'int|string'],
+			],
+			[
+				new Expr\BinaryOp\BooleanAnd(
+					new Expr\BinaryOp\BooleanOr(
+						new Expr\BooleanNot($this->createFunctionCall('is_int', 'foo')),
+						new Expr\BooleanNot($this->createFunctionCall('is_string', 'foo'))
+					),
+					$this->createFunctionCall('random')
+				),
+				[],
+				[],
+			],
+
+			[
+				new Identical(
+					$this->createFunctionCall('is_int'),
+					new Expr\ConstFetch(new Name('true'))
+				),
+				['$foo' => 'int', 'is_int($foo)' => 'true'],
+				['$foo' => '~int', 'is_int($foo)' => '~true'],
+			],
+			[
+				new Identical(
+					$this->createFunctionCall('is_int'),
+					new Expr\ConstFetch(new Name('false'))
+				),
+				['is_int($foo)' => 'false', '$foo' => '~int'],
+				['$foo' => 'int', 'is_int($foo)' => '~false'],
+			],
+			[
+				new Equal(
+					$this->createFunctionCall('is_int'),
+					new Expr\ConstFetch(new Name('true'))
+				),
+				['$foo' => 'int'],
+				['$foo' => '~int'],
+			],
+			[
+				new Equal(
+					$this->createFunctionCall('is_int'),
+					new Expr\ConstFetch(new Name('false'))
+				),
+				['$foo' => '~int'],
+				['$foo' => 'int'],
 			],
 		];
 	}

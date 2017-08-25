@@ -3,6 +3,7 @@
 namespace PHPStan\Reflection;
 
 use PhpParser\Node\Stmt\Function_;
+use PHPStan\Cache\Cache;
 use PHPStan\Parser\FunctionCallStatementFinder;
 use PHPStan\Parser\Parser;
 use PHPStan\Reflection\Php\DummyParameter;
@@ -27,7 +28,7 @@ class FunctionReflection implements ParametersAcceptor
 	/** @var \PHPStan\Parser\FunctionCallStatementFinder */
 	private $functionCallStatementFinder;
 
-	/** @var \Nette\Caching\Cache */
+	/** @var \PHPStan\Cache\Cache */
 	private $cache;
 
 	/** @var \PHPStan\Type\Type[] */
@@ -46,7 +47,7 @@ class FunctionReflection implements ParametersAcceptor
 		\ReflectionFunction $reflection,
 		Parser $parser,
 		FunctionCallStatementFinder $functionCallStatementFinder,
-		\Nette\Caching\Cache $cache,
+		Cache $cache,
 		array $phpDocParameterTypes,
 		Type $phpDocReturnType = null
 	)
@@ -146,6 +147,28 @@ class FunctionReflection implements ParametersAcceptor
 					true
 				);
 			}
+
+			if (
+				$this->reflection->getName() === 'imagewebp'
+				&& count($this->parameters) === 2
+			) {
+				$this->parameters[] = new DummyParameter(
+					'quality',
+					new IntegerType(),
+					true
+				);
+			}
+
+			if (
+				$this->reflection->getName() === 'setproctitle'
+				&& count($this->parameters) === 0
+			) {
+				$this->parameters[] = new DummyParameter(
+					'title',
+					new StringType(),
+					false
+				);
+			}
 		}
 
 		return $this->parameters;
@@ -155,7 +178,7 @@ class FunctionReflection implements ParametersAcceptor
 	{
 		$isNativelyVariadic = $this->reflection->isVariadic();
 		if (!$isNativelyVariadic && $this->reflection->getFileName() !== false) {
-			$key = sprintf('variadic-function-%s-v2', $this->reflection->getName());
+			$key = sprintf('variadic-function-%s-v0', $this->reflection->getName());
 			$cachedResult = $this->cache->load($key);
 			if ($cachedResult === null) {
 				$nodes = $this->parser->parseFile($this->reflection->getFileName());
@@ -211,6 +234,9 @@ class FunctionReflection implements ParametersAcceptor
 	public function getReturnType(): Type
 	{
 		if ($this->returnType === null) {
+			if ($this->reflection->getName() === 'count') {
+				return $this->returnType = new IntegerType();
+			}
 			$returnType = $this->reflection->getReturnType();
 			$phpDocReturnType = $this->phpDocReturnType;
 			if (

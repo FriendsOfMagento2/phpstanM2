@@ -2,6 +2,8 @@
 
 namespace PHPStan\Type;
 
+use PHPStan\TrinaryLogic;
+
 class ArrayType implements StaticResolvableType
 {
 
@@ -19,7 +21,7 @@ class ArrayType implements StaticResolvableType
 		bool $possiblyCallable = false
 	)
 	{
-		if ($itemType instanceof UnionType) {
+		if ($itemType instanceof UnionType && !TypeCombinator::isUnionTypesEnabled()) {
 			$itemType = new MixedType();
 		}
 		$this->itemType = $itemType;
@@ -57,7 +59,7 @@ class ArrayType implements StaticResolvableType
 
 	public function combineWith(Type $otherType): Type
 	{
-		if ($otherType->isIterable() === self::RESULT_YES) {
+		if ($otherType->isIterable()->yes()) {
 			$isItemInferredFromLiteralArray = $this->isItemTypeInferredFromLiteralArray();
 			$isPossiblyCallable = $this->isPossiblyCallable();
 			if ($otherType instanceof self) {
@@ -80,12 +82,8 @@ class ArrayType implements StaticResolvableType
 			return $this->getItemType()->accepts($type->getItemType());
 		}
 
-		if ($type instanceof MixedType) {
-			return true;
-		}
-
-		if ($type instanceof UnionType) {
-			return UnionTypeHelper::acceptsAll($this, $type);
+		if ($type instanceof CompoundType) {
+			return CompoundTypeHelper::accepts($type, $this);
 		}
 
 		return false;
@@ -93,7 +91,8 @@ class ArrayType implements StaticResolvableType
 
 	public function describe(): string
 	{
-		return sprintf('%s[]', $this->getItemType()->describe());
+		$format = $this->itemType instanceof UnionType ? '(%s)[]' : '%s[]';
+		return sprintf($format, $this->getItemType()->describe());
 	}
 
 	public function isDocumentableNatively(): bool
@@ -127,9 +126,9 @@ class ArrayType implements StaticResolvableType
 		return $this;
 	}
 
-	public function isIterable(): int
+	public function isIterable(): TrinaryLogic
 	{
-		return self::RESULT_YES;
+		return TrinaryLogic::createYes();
 	}
 
 	public function getIterableKeyType(): Type
@@ -140,6 +139,11 @@ class ArrayType implements StaticResolvableType
 	public function getIterableValueType(): Type
 	{
 		return $this->getItemType();
+	}
+
+	public static function __set_state(array $properties): Type
+	{
+		return new self($properties['itemType'], $properties['itemTypeInferredFromLiteralArray'], $properties['possiblyCallable']);
 	}
 
 }

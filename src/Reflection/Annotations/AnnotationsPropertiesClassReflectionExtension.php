@@ -24,7 +24,7 @@ class AnnotationsPropertiesClassReflectionExtension implements PropertiesClassRe
 	public function hasProperty(ClassReflection $classReflection, string $propertyName): bool
 	{
 		if (!isset($this->properties[$classReflection->getName()])) {
-			$this->properties[$classReflection->getName()] = $this->createProperties($classReflection);
+			$this->properties[$classReflection->getName()] = $this->createProperties($classReflection, $classReflection);
 		}
 
 		return isset($this->properties[$classReflection->getName()][$propertyName]);
@@ -37,17 +37,27 @@ class AnnotationsPropertiesClassReflectionExtension implements PropertiesClassRe
 
 	/**
 	 * @param \PHPStan\Reflection\ClassReflection $classReflection
+	 * @param \PHPStan\Reflection\ClassReflection $declaringClass
 	 * @return \PHPStan\Reflection\PropertyReflection[]
 	 */
-	private function createProperties(ClassReflection $classReflection): array
+	private function createProperties(
+		ClassReflection $classReflection,
+		ClassReflection $declaringClass
+	): array
 	{
 		$properties = [];
+		foreach ($classReflection->getTraits() as $traitClass) {
+			$properties += $this->createProperties($traitClass, $classReflection);
+		}
 		foreach ($classReflection->getParents() as $parentClass) {
-			$properties += $this->createProperties($parentClass);
+			$properties += $this->createProperties($parentClass, $parentClass);
+			foreach ($parentClass->getTraits() as $traitClass) {
+				$properties += $this->createProperties($traitClass, $parentClass);
+			}
 		}
 
 		foreach ($classReflection->getInterfaces() as $interfaceClass) {
-			$properties += $this->createProperties($interfaceClass);
+			$properties += $this->createProperties($interfaceClass, $interfaceClass);
 		}
 
 		$fileName = $classReflection->getNativeReflection()->getFileName();
@@ -62,14 +72,20 @@ class AnnotationsPropertiesClassReflectionExtension implements PropertiesClassRe
 
 		$typeMap = $this->fileTypeMapper->getTypeMap($fileName);
 
-		preg_match_all('#@property(?:-read)?\s+' . FileTypeMapper::TYPE_PATTERN . '\s+\$([a-zA-Z0-9_]+)#', $docComment, $matches, PREG_SET_ORDER);
+		preg_match_all('#@property(-read|-write)?\s+' . FileTypeMapper::TYPE_PATTERN . '\s+\$([a-zA-Z0-9_]+)#', $docComment, $matches, PREG_SET_ORDER);
 		foreach ($matches as $match) {
-			$typeString = $match[1];
+			$typeString = $match[2];
 			if (!isset($typeMap[$typeString])) {
 				continue;
 			}
-
-			$properties[$match[2]] = new AnnotationPropertyReflection($classReflection, $typeMap[$typeString]);
+			$readable = $writable = true;
+			if ($match[1] === '-read') {
+				$writable = false;
+			} elseif ($match[1] === '-write') {
+				$readable = false;
+			}
+			$type = $typeMap[$typeString];
+			$properties[$match[3]] = new AnnotationPropertyReflection($classReflection, $type, $readable, $writable);
 		}
 
 		return $properties;

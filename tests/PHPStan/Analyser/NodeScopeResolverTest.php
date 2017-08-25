@@ -5,9 +5,10 @@ namespace PHPStan\Analyser;
 use PhpParser\Node\Expr\Exit_;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\StaticCall;
-use PHPStan\File\FileExcluder;
+use PHPStan\Cache\Cache;
 use PHPStan\File\FileHelper;
 use PHPStan\Reflection\MethodReflection;
+use PHPStan\TrinaryLogic;
 use PHPStan\Type\DynamicMethodReturnTypeExtension;
 use PHPStan\Type\DynamicStaticMethodReturnTypeExtension;
 use PHPStan\Type\FileTypeMapper;
@@ -18,33 +19,6 @@ use SomeNodeScopeResolverNamespace\Foo;
 class NodeScopeResolverTest extends \PHPStan\TestCase
 {
 
-	/** @var \PHPStan\Analyser\NodeScopeResolver */
-	private $resolver;
-
-	/** @var \PhpParser\PrettyPrinter\Standard */
-	private $printer;
-
-	protected function setUp()
-	{
-		$this->printer = new \PhpParser\PrettyPrinter\Standard();
-		$this->resolver = new NodeScopeResolver(
-			$this->createBroker(),
-			$this->getParser(),
-			$this->printer,
-			new FileTypeMapper($this->getParser(), $this->createMock(\Nette\Caching\Cache::class)),
-			new FileExcluder($this->createMock(FileHelper::class), []),
-			new \PhpParser\BuilderFactory(),
-			new FileHelper('/'),
-			true,
-			true,
-			[
-				\EarlyTermination\Foo::class => [
-					'doFoo',
-				],
-			]
-		);
-	}
-
 	public function testClassMethodScope()
 	{
 		$this->processFile(__DIR__ . '/data/class.php', function (\PhpParser\Node $node, Scope $scope) {
@@ -53,124 +27,572 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 				$this->assertSame(Foo::class, $scope->getClassReflection()->getName());
 				$this->assertSame('doFoo', $scope->getFunctionName());
 				$this->assertSame(Foo::class, $scope->getVariableType('this')->getClass());
-				$this->assertTrue($scope->hasVariableType('baz'));
-				$this->assertTrue($scope->hasVariableType('lorem'));
-				$this->assertFalse($scope->hasVariableType('ipsum'));
-				$this->assertTrue($scope->hasVariableType('i'));
-				$this->assertTrue($scope->hasVariableType('val'));
+				$this->assertTrue($scope->hasVariableType('baz')->yes());
+				$this->assertTrue($scope->hasVariableType('lorem')->yes());
+				$this->assertFalse($scope->hasVariableType('ipsum')->yes());
+				$this->assertTrue($scope->hasVariableType('i')->yes());
+				$this->assertTrue($scope->hasVariableType('val')->yes());
 				$this->assertSame('SomeNodeScopeResolverNamespace\InvalidArgumentException', $scope->getVariableType('exception')->getClass());
-				$this->assertTrue($scope->hasVariableType('staticVariable'));
+				$this->assertTrue($scope->hasVariableType('staticVariable')->yes());
 			}
 		});
 	}
 
-	public function testAssignInIf()
+	public function dataAssignInIf(): array
 	{
-		$this->processFile(__DIR__ . '/data/if.php', function (\PhpParser\Node $node, Scope $scope) {
+		/** @var \PHPStan\Analyser\Scope $testScope */
+		$testScope = null;
+		$this->processFile(__DIR__ . '/data/if.php', function (\PhpParser\Node $node, Scope $scope) use (&$testScope) {
 			if ($node instanceof Exit_) {
-				$variables = $scope->getVariableTypes();
-				$this->assertArrayHasKey('foo', $variables);
-				$this->assertArrayHasKey('lorem', $variables);
-				$this->assertArrayHasKey('callParameter', $variables);
-				$this->assertArrayHasKey('arrOne', $variables);
-				$this->assertArrayHasKey('arrTwo', $variables);
-				$this->assertArrayHasKey('arrTwo', $variables);
-				$this->assertArrayHasKey('listedOne', $variables);
-				$this->assertArrayHasKey('listedTwo', $variables);
-				$this->assertArrayHasKey('listedThree', $variables);
-				$this->assertArrayHasKey('listedFour', $variables);
-				$this->assertArrayHasKey('inArray', $variables);
-				$this->assertArrayHasKey('i', $variables);
-				$this->assertArrayHasKey('f', $variables);
-				$this->assertArrayHasKey('matches', $variables);
-				$this->assertArrayHasKey('anotherArray', $variables);
-				$this->assertArrayHasKey('ifVar', $variables);
-				$this->assertArrayNotHasKey('ifNotVar', $variables);
-				$this->assertArrayHasKey('ifNestedVar', $variables);
-				$this->assertArrayNotHasKey('ifNotNestedVar', $variables);
-				$this->assertArrayHasKey('matches2', $variables);
-				$this->assertArrayHasKey('inTry', $variables);
-				$this->assertArrayHasKey('matches3', $variables);
-				$this->assertArrayNotHasKey('matches4', $variables);
-				$this->assertArrayHasKey('issetBar', $variables);
-				$this->assertArrayHasKey('doWhileVar', $variables);
-				$this->assertArrayHasKey('switchVar', $variables);
-				$this->assertArrayNotHasKey('noSwitchVar', $variables);
-				$this->assertArrayHasKey('inTryTwo', $variables);
-				$this->assertArrayHasKey('ternaryMatches', $variables);
-				$this->assertArrayHasKey('previousI', $variables);
-				$this->assertArrayHasKey('previousJ', $variables);
-				$this->assertArrayHasKey('frame', $variables);
-				$this->assertArrayHasKey('listOne', $variables);
-				$this->assertArrayHasKey('listTwo', $variables);
-				$this->assertArrayHasKey('e', $variables);
-				$this->assertArrayHasKey('exception', $variables);
-				$this->assertArrayNotHasKey('inTryNotInCatch', $variables);
-				$this->assertArrayHasKey('fooObjectFromTryCatch', $variables);
-				$this->assertSame('InTryCatchFoo', $variables['fooObjectFromTryCatch']->describe());
-				$this->assertArrayHasKey('mixedVarFromTryCatch', $variables);
-				$this->assertSame('float|int', $variables['mixedVarFromTryCatch']->describe());
-				$this->assertArrayHasKey('nullableIntegerFromTryCatch', $variables);
-				$this->assertSame('int|null', $variables['nullableIntegerFromTryCatch']->describe());
-				$this->assertArrayHasKey('anotherNullableIntegerFromTryCatch', $variables);
-				$this->assertSame('int|null', $variables['anotherNullableIntegerFromTryCatch']->describe());
-
-				$this->assertSame('mixed[]', $variables['nullableIntegers']->describe());
-				$this->assertSame('mixed[]', $variables['mixeds']->describe());
-
-				/** @var \PHPStan\Type\ArrayType $mixeds */
-				$mixeds = $variables['mixeds'];
-				$this->assertInstanceOf(MixedType::class, $mixeds->getItemType());
-
-				$this->assertArrayHasKey('trueOrFalse', $variables);
-				$this->assertSame('bool', $variables['trueOrFalse']->describe());
-				$this->assertArrayHasKey('falseOrTrue', $variables);
-				$this->assertSame('bool', $variables['falseOrTrue']->describe());
-				$this->assertArrayHasKey('true', $variables);
-				$this->assertSame('true', $variables['true']->describe());
-				$this->assertArrayHasKey('false', $variables);
-				$this->assertSame('false', $variables['false']->describe());
-
-				$this->assertArrayHasKey('trueOrFalseFromSwitch', $variables);
-				$this->assertSame('bool', $variables['trueOrFalseFromSwitch']->describe());
-				$this->assertArrayHasKey('trueOrFalseInSwitchWithDefault', $variables);
-				$this->assertSame('bool', $variables['trueOrFalseInSwitchWithDefault']->describe());
-				$this->assertArrayHasKey('trueOrFalseInSwitchInAllCases', $variables);
-				$this->assertSame('bool', $variables['trueOrFalseInSwitchInAllCases']->describe());
-				$this->assertArrayHasKey('trueOrFalseInSwitchInAllCasesWithDefault', $variables);
-				$this->assertSame('bool', $variables['trueOrFalseInSwitchInAllCasesWithDefault']->describe());
-				$this->assertArrayHasKey('trueOrFalseInSwitchInAllCasesWithDefaultCase', $variables);
-				$this->assertSame('bool', $variables['trueOrFalseInSwitchInAllCasesWithDefaultCase']->describe());
-				$this->assertArrayHasKey('variableDefinedInSwitchWithOtherCasesWithEarlyTermination', $variables);
-				$this->assertArrayHasKey('anotherVariableDefinedInSwitchWithOtherCasesWithEarlyTermination', $variables);
-				$this->assertArrayNotHasKey('variableDefinedOnlyInEarlyTerminatingSwitchCases', $variables);
-				$this->assertArrayHasKey('nullableTrueOrFalse', $variables);
-				$this->assertSame('bool|null', $variables['nullableTrueOrFalse']->describe());
-				$this->assertArrayNotHasKey('nonexistentVariableOutsideFor', $variables);
-				$this->assertArrayHasKey('integerOrNullFromFor', $variables);
-				$this->assertSame('int|null', $variables['integerOrNullFromFor']->describe());
-				$this->assertArrayNotHasKey('nonexistentVariableOutsideWhile', $variables);
-				$this->assertArrayHasKey('integerOrNullFromWhile', $variables);
-				$this->assertSame('int|null', $variables['integerOrNullFromWhile']->describe());
-				$this->assertArrayNotHasKey('nonexistentVariableOutsideForeach', $variables);
-				$this->assertArrayHasKey('integerOrNullFromForeach', $variables);
-				$this->assertSame('int|null', $variables['integerOrNullFromForeach']->describe());
-				$this->assertArrayHasKey('notNullableString', $variables);
-				$this->assertSame('string', $variables['notNullableString']->describe());
-				$this->assertArrayHasKey('nullableString', $variables);
-				$this->assertSame('string|null', $variables['nullableString']->describe());
-				$this->assertArrayHasKey('alsoNotNullableString', $variables);
-				$this->assertSame('string', $variables['alsoNotNullableString']->describe());
-				$this->assertArrayHasKey('arrayOfIntegers', $variables);
-				$this->assertSame('int[]', $variables['arrayOfIntegers']->describe());
-				$this->assertArrayHasKey('arrayAccessObject', $variables);
-				$this->assertSame(\ObjectWithArrayAccess\Foo::class, $variables['arrayAccessObject']->describe());
-				$this->assertArrayHasKey('width', $variables);
-				$this->assertSame('float', $variables['width']->describe());
-				$this->assertArrayHasKey('someVariableThatWillGetOverrideInFinally', $variables);
-				$this->assertSame('string', $variables['someVariableThatWillGetOverrideInFinally']->describe());
+				$testScope = $scope;
 			}
 		});
+
+		return [
+			[
+				$testScope,
+				'nonexistentVariable',
+				TrinaryLogic::createNo(),
+			],
+			[
+				$testScope,
+				'foo',
+				TrinaryLogic::createYes(),
+				'bool', // mixed?
+			],
+			[
+				$testScope,
+				'lorem',
+				TrinaryLogic::createYes(),
+				'int',
+			],
+			[
+				$testScope,
+				'callParameter',
+				TrinaryLogic::createYes(),
+				'int',
+			],
+			[
+				$testScope,
+				'arrOne',
+				TrinaryLogic::createYes(),
+				'string[]',
+			],
+			[
+				$testScope,
+				'arrTwo',
+				TrinaryLogic::createYes(),
+				'(Foo|string)[]',
+			],
+			[
+				$testScope,
+				'arrThree',
+				TrinaryLogic::createYes(),
+				'string[]',
+			],
+			[
+				$testScope,
+				'listedOne',
+				TrinaryLogic::createYes(),
+				'mixed',
+			],
+			[
+				$testScope,
+				'listedTwo',
+				TrinaryLogic::createYes(),
+				'mixed',
+			],
+			[
+				$testScope,
+				'listedThree',
+				TrinaryLogic::createYes(),
+				'mixed',
+			],
+			[
+				$testScope,
+				'listedFour',
+				TrinaryLogic::createYes(),
+				'mixed',
+			],
+			[
+				$testScope,
+				'inArray',
+				TrinaryLogic::createYes(),
+				'int',
+			],
+			[
+				$testScope,
+				'i',
+				TrinaryLogic::createYes(),
+				'int',
+			],
+			[
+				$testScope,
+				'f',
+				TrinaryLogic::createMaybe(),
+				'int',
+			],
+			[
+				$testScope,
+				'anotherF',
+				TrinaryLogic::createYes(),
+				'int',
+			],
+			[
+				$testScope,
+				'matches',
+				TrinaryLogic::createYes(),
+				'mixed', // string[]
+			],
+			[
+				$testScope,
+				'anotherArray',
+				TrinaryLogic::createYes(),
+				'string[][]',
+			],
+			[
+				$testScope,
+				'ifVar',
+				TrinaryLogic::createYes(),
+				'int',
+			],
+			[
+				$testScope,
+				'ifNotVar',
+				TrinaryLogic::createMaybe(),
+				'int',
+			],
+			[
+				$testScope,
+				'ifNestedVar',
+				TrinaryLogic::createYes(),
+				'int|mixed',
+			],
+			[
+				$testScope,
+				'ifNotNestedVar',
+				TrinaryLogic::createMaybe(),
+				'int',
+			],
+			[
+				$testScope,
+				'variableOnlyInEarlyTerminatingElse',
+				TrinaryLogic::createNo(),
+			],
+			[
+				$testScope,
+				'matches2',
+				TrinaryLogic::createYes(),
+				'mixed', // string[]
+			],
+			[
+				$testScope,
+				'inTry',
+				TrinaryLogic::createYes(),
+				'int',
+			],
+			[
+				$testScope,
+				'matches3',
+				TrinaryLogic::createYes(),
+				'mixed', // string[]
+			],
+			[
+				$testScope,
+				'matches4',
+				TrinaryLogic::createMaybe(),
+				'mixed', // string[]
+			],
+			[
+				$testScope,
+				'issetFoo',
+				TrinaryLogic::createYes(),
+				'Foo',
+			],
+			[
+				$testScope,
+				'issetBar',
+				TrinaryLogic::createYes(),
+				'mixed',
+			],
+			[
+				$testScope,
+				'doWhileVar',
+				TrinaryLogic::createYes(),
+				'int',
+			],
+			[
+				$testScope,
+				'switchVar',
+				TrinaryLogic::createYes(),
+				'int',
+			],
+			[
+				$testScope,
+				'noSwitchVar',
+				TrinaryLogic::createMaybe(),
+				'int',
+			],
+			[
+				$testScope,
+				'anotherNoSwitchVar',
+				TrinaryLogic::createMaybe(),
+				'int',
+			],
+			[
+				$testScope,
+				'inTryTwo',
+				TrinaryLogic::createYes(),
+				'int',
+			],
+			[
+				$testScope,
+				'ternaryMatches',
+				TrinaryLogic::createYes(),
+				'mixed', // string[]
+			],
+			[
+				$testScope,
+				'previousI',
+				TrinaryLogic::createYes(),
+				'int',
+			],
+			[
+				$testScope,
+				'previousJ',
+				TrinaryLogic::createYes(),
+				'int',
+			],
+			[
+				$testScope,
+				'frame',
+				TrinaryLogic::createYes(),
+				'mixed',
+			],
+			[
+				$testScope,
+				'listOne',
+				TrinaryLogic::createYes(),
+				'mixed', // int
+			],
+			[
+				$testScope,
+				'listTwo',
+				TrinaryLogic::createYes(),
+				'mixed', // int
+			],
+			[
+				$testScope,
+				'e',
+				TrinaryLogic::createYes(),
+				'Exception',
+			],
+			[
+				$testScope,
+				'exception',
+				TrinaryLogic::createYes(),
+				'Exception',
+			],
+			[
+				$testScope,
+				'inTryNotInCatch',
+				TrinaryLogic::createMaybe(),
+				'int',
+			],
+			[
+				$testScope,
+				'fooObjectFromTryCatch',
+				TrinaryLogic::createYes(),
+				'InTryCatchFoo',
+			],
+			[
+				$testScope,
+				'mixedVarFromTryCatch',
+				TrinaryLogic::createYes(),
+				'float|int',
+			],
+			[
+				$testScope,
+				'nullableIntegerFromTryCatch',
+				TrinaryLogic::createYes(),
+				'int|null',
+			],
+			[
+				$testScope,
+				'anotherNullableIntegerFromTryCatch',
+				TrinaryLogic::createYes(),
+				'int|null',
+			],
+			[
+				$testScope,
+				'nullableIntegers',
+				TrinaryLogic::createYes(),
+				'(int|null)[]',
+			],
+			[
+				$testScope,
+				'union',
+				TrinaryLogic::createYes(),
+				'(int|string)[]',
+				'int|string',
+			],
+			[
+				$testScope,
+				'trueOrFalse',
+				TrinaryLogic::createYes(),
+				'bool',
+			],
+			[
+				$testScope,
+				'falseOrTrue',
+				TrinaryLogic::createYes(),
+				'bool',
+			],
+			[
+				$testScope,
+				'true',
+				TrinaryLogic::createYes(),
+				'true',
+			],
+			[
+				$testScope,
+				'false',
+				TrinaryLogic::createYes(),
+				'false',
+			],
+			[
+				$testScope,
+				'trueOrFalseFromSwitch',
+				TrinaryLogic::createYes(),
+				'bool',
+			],
+			[
+				$testScope,
+				'trueOrFalseInSwitchWithDefault',
+				TrinaryLogic::createYes(),
+				'bool',
+			],
+			[
+				$testScope,
+				'trueOrFalseInSwitchInAllCases',
+				TrinaryLogic::createYes(),
+				'bool',
+			],
+			[
+				$testScope,
+				'trueOrFalseInSwitchInAllCasesWithDefault',
+				TrinaryLogic::createYes(),
+				'bool',
+			],
+			[
+				$testScope,
+				'trueOrFalseInSwitchInAllCasesWithDefaultCase',
+				TrinaryLogic::createYes(),
+				'true',
+			],
+			[
+				$testScope,
+				'variableDefinedInSwitchWithOtherCasesWithEarlyTermination',
+				TrinaryLogic::createYes(),
+				'true',
+			],
+			[
+				$testScope,
+				'anotherVariableDefinedInSwitchWithOtherCasesWithEarlyTermination',
+				TrinaryLogic::createYes(),
+				'true',
+			],
+			[
+				$testScope,
+				'variableDefinedOnlyInEarlyTerminatingSwitchCases',
+				TrinaryLogic::createNo(),
+			],
+			[
+				$testScope,
+				'nullableTrueOrFalse',
+				TrinaryLogic::createYes(),
+				'bool|null',
+			],
+			[
+				$testScope,
+				'nonexistentVariableOutsideFor',
+				TrinaryLogic::createMaybe(),
+				'int',
+			],
+			[
+				$testScope,
+				'integerOrNullFromFor',
+				TrinaryLogic::createYes(),
+				'int|null',
+			],
+			[
+				$testScope,
+				'nonexistentVariableOutsideWhile',
+				TrinaryLogic::createMaybe(),
+				'int',
+			],
+			[
+				$testScope,
+				'integerOrNullFromWhile',
+				TrinaryLogic::createYes(),
+				'int|null',
+			],
+			[
+				$testScope,
+				'nonexistentVariableOutsideForeach',
+				TrinaryLogic::createMaybe(),
+				'null',
+			],
+			[
+				$testScope,
+				'integerOrNullFromForeach',
+				TrinaryLogic::createYes(),
+				'int|null',
+			],
+			[
+				$testScope,
+				'notNullableString',
+				TrinaryLogic::createYes(),
+				'string',
+			],
+			[
+				$testScope,
+				'anotherNotNullableString',
+				TrinaryLogic::createYes(),
+				'string',
+			],
+			[
+				$testScope,
+				'notNullableObject',
+				TrinaryLogic::createYes(),
+				'Foo',
+			],
+			[
+				$testScope,
+				'nullableString',
+				TrinaryLogic::createYes(),
+				'string|null',
+			],
+			[
+				$testScope,
+				'alsoNotNullableString',
+				TrinaryLogic::createYes(),
+				'string',
+			],
+			[
+				$testScope,
+				'arrayOfIntegers',
+				TrinaryLogic::createYes(),
+				'int[]',
+			],
+			[
+				$testScope,
+				'arrayAccessObject',
+				TrinaryLogic::createYes(),
+				\ObjectWithArrayAccess\Foo::class,
+			],
+			[
+				$testScope,
+				'width',
+				TrinaryLogic::createYes(),
+				'float',
+			],
+			[
+				$testScope,
+				'someVariableThatWillGetOverrideInFinally',
+				TrinaryLogic::createYes(),
+				'string',
+			],
+			[
+				$testScope,
+				'maybeDefinedButLaterCertainlyDefined',
+				TrinaryLogic::createYes(),
+				'int',
+			],
+		];
+	}
+
+	public function dataUnionInCatch(): array
+	{
+		return [
+			[
+				'CatchUnion\BarException|CatchUnion\FooException',
+				'$e',
+			],
+		];
+	}
+
+	/**
+	 * @requires PHP 7.1
+	 * @dataProvider dataUnionInCatch
+	 * @param string $description
+	 * @param string $expression
+	 */
+	public function testUnionInCatch(
+		string $description,
+		string $expression
+	)
+	{
+		$this->assertTypes(
+			__DIR__ . '/data/catch-union.php',
+			$description,
+			$expression
+		);
+	}
+
+	/**
+	 * @dataProvider dataAssignInIf
+	 * @param \PHPStan\Analyser\Scope $scope
+	 * @param string $variableName
+	 * @param \PHPStan\TrinaryLogic $expectedCertainty
+	 * @param string|null $typeDescription
+	 * @param string|null $iterableValueTypeDescription
+	 */
+	public function testAssignInIf(
+		Scope $scope,
+		string $variableName,
+		TrinaryLogic $expectedCertainty,
+		string $typeDescription = null,
+		string $iterableValueTypeDescription = null
+	)
+	{
+		$certainty = $scope->hasVariableType($variableName);
+		$this->assertTrue(
+			$expectedCertainty->equals($certainty),
+			sprintf(
+				'Certainty of variable $%s is %s, expected %s',
+				$variableName,
+				$certainty->describe(),
+				$expectedCertainty->describe()
+			)
+		);
+		if (!$expectedCertainty->no()) {
+			if ($typeDescription === null) {
+				$this->fail(sprintf('Missing expected type for defined variable $%s.', $variableName));
+			}
+
+			$this->assertSame(
+				$typeDescription,
+				$scope->getVariableType($variableName)->describe(),
+				sprintf('Type of variable $%s does not match the expected one.', $variableName)
+			);
+
+			if ($iterableValueTypeDescription !== null) {
+				$this->assertSame(
+					$iterableValueTypeDescription,
+					$scope->getVariableType($variableName)->getIterableValueType()->describe(),
+					sprintf('Iterable value type of variable $%s does not match the expected one.', $variableName)
+				);
+			}
+		} elseif ($typeDescription !== null) {
+			$this->fail(
+				sprintf(
+					'No type should be asserted for an undefined variable $%s, %s given.',
+					$variableName,
+					$typeDescription
+				)
+			);
+		}
 	}
 
 	/**
@@ -178,17 +600,13 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 	 */
 	public function testArrayDestructuringShortSyntax()
 	{
-		if (self::isObsoletePhpParserVersion()) {
-			$this->markTestSkipped('Test requires PHP-Parser ^3.0.0');
-		}
 		$this->processFile(__DIR__ . '/data/array-destructuring-short.php', function (\PhpParser\Node $node, Scope $scope) {
 			if ($node instanceof Exit_) {
-				$variables = $scope->getVariableTypes();
-				$this->assertArrayHasKey('a', $variables);
-				$this->assertArrayHasKey('b', $variables);
-				$this->assertArrayHasKey('c', $variables);
-				$this->assertArrayHasKey('d', $variables);
-				$this->assertArrayHasKey('e', $variables);
+				$this->assertTrue($scope->hasVariableType('a')->yes());
+				$this->assertTrue($scope->hasVariableType('b')->yes());
+				$this->assertTrue($scope->hasVariableType('c')->yes());
+				$this->assertTrue($scope->hasVariableType('d')->yes());
+				$this->assertTrue($scope->hasVariableType('e')->yes());
 			}
 		});
 	}
@@ -995,11 +1413,11 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 				'12 ?: null',
 			],
 			[
-				'string|int',
+				'int|string',
 				'$string ?: 12',
 			],
 			[
-				'string|int',
+				'int|string',
 				'$stringOrNull ?: 12',
 			],
 			[
@@ -1019,11 +1437,11 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 				'$stringOrNull ?? \'foo\'',
 			],
 			[
-				'string|int',
+				'int|string',
 				'$string ?? $integer',
 			],
 			[
-				'string|int',
+				'int|string',
 				'$stringOrNull ?? $integer',
 			],
 			[
@@ -1055,7 +1473,7 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 				'min(...[1.1, 2.2, 3.3])',
 			],
 			[
-				'mixed', // not currently possible to represent an array that contains a union type
+				'float|int',
 				'min(...[1.1, 2, 3])',
 			],
 			[
@@ -1089,6 +1507,90 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 			[
 				'float|int',
 				'min(1, 2.2, 3.3)',
+			],
+			[
+				'string',
+				'"Hello $world"',
+			],
+			[
+				'string',
+				'$string .= "str"',
+			],
+			[
+				'int',
+				'$integer <<= 2.2',
+			],
+			[
+				'int',
+				'$float >>= 2.2',
+			],
+			[
+				'int',
+				'count($arrayOfIntegers)',
+			],
+			[
+				'int',
+				'count($arrayOfIntegers) + count($arrayOfIntegers)',
+			],
+			[
+				'bool',
+				'$string === "foo"',
+			],
+			[
+				'bool',
+				'$string !== "foo"',
+			],
+			[
+				'bool',
+				'$string == "foo"',
+			],
+			[
+				'bool',
+				'$string != "foo"',
+			],
+			[
+				'bool',
+				'$foo instanceof Foo',
+			],
+			[
+				'bool',
+				'isset($foo)',
+			],
+			[
+				'bool',
+				'!isset($foo)',
+			],
+			[
+				'bool',
+				'empty($foo)',
+			],
+			[
+				'bool',
+				'!empty($foo)',
+			],
+			[
+				'int[]',
+				'$arrayOfIntegers + $arrayOfIntegers',
+			],
+			[
+				'int[]',
+				'$arrayOfIntegers += $arrayOfIntegers',
+			],
+			[
+				'(int|string)[]',
+				'$arrayOfIntegers += ["foo"]',
+			],
+			[
+				'mixed',
+				'$arrayOfIntegers += "foo"',
+			],
+			[
+				'int',
+				'@count($arrayOfIntegers)',
+			],
+			[
+				'int[]',
+				'$anotherArray = $arrayOfIntegers',
 			],
 		];
 	}
@@ -1153,7 +1655,7 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 				'$emptyArray[0]',
 			],
 			[
-				'mixed',
+				'int|string',
 				'$mixedArray[0]',
 			],
 			[
@@ -1932,7 +2434,7 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 			],
 			[
 				__DIR__ . '/data/foreach/array-object-type.php',
-				'mixed',
+				'int|string',
 				'self::MIXED_CONSTANT[0]',
 			],
 			[
@@ -1955,6 +2457,36 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 				'int',
 				'$integer',
 			],
+			[
+				__DIR__ . '/data/foreach/reusing-specified-variable.php',
+				'int',
+				'$business',
+			],
+			[
+				__DIR__ . '/data/foreach/type-in-comment-variable-first.php',
+				'callable',
+				'$value',
+			],
+			[
+				__DIR__ . '/data/foreach/type-in-comment-variable-second.php',
+				'stdClass',
+				'$value',
+			],
+			[
+				__DIR__ . '/data/foreach/type-in-comment-no-variable.php',
+				'mixed',
+				'$value',
+			],
+			[
+				__DIR__ . '/data/foreach/type-in-comment-wrong-variable.php',
+				'mixed',
+				'$value',
+			],
+			[
+				__DIR__ . '/data/foreach/type-in-comment-variable-with-reference.php',
+				'string',
+				'$value',
+			],
 		];
 	}
 
@@ -1965,6 +2497,36 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 	 * @param string $expression
 	 */
 	public function testForeachArrayType(
+		string $file,
+		string $description,
+		string $expression
+	)
+	{
+		$this->assertTypes(
+			$file,
+			$description,
+			$expression
+		);
+	}
+
+	public function dataOverridingSpecifiedType(): array
+	{
+		return [
+			[
+				__DIR__ . '/data/catch-specified-variable.php',
+				'TryCatchWithSpecifiedVariable\FooException',
+				'$foo',
+			],
+		];
+	}
+
+	/**
+	 * @dataProvider dataOverridingSpecifiedType
+	 * @param string $file
+	 * @param string $description
+	 * @param string $expression
+	 */
+	public function testOverridingSpecifiedType(
 		string $file,
 		string $description,
 		string $expression
@@ -2249,8 +2811,12 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 				'$unionBar',
 			],
 			[
-				'Iterables\Foo[]|Iterables\Bar[]|Iterables\Collection',
+				'Iterables\Bar[]|Iterables\Collection|Iterables\Foo[]',
 				'$mixedUnionIterableType',
+			],
+			[
+				'Iterables\Bar[]|Iterables\Collection',
+				'$unionIterableIterableType',
 			],
 			[
 				'mixed',
@@ -2263,6 +2829,38 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 			[
 				'Iterables\Bar',
 				'$unionBarFromMethod',
+			],
+			[
+				'iterable(string[])',
+				'$this->stringIterableProperty',
+			],
+			[
+				'iterable(mixed[])',
+				'$this->mixedIterableProperty',
+			],
+			[
+				'iterable(int[])',
+				'$integers',
+			],
+			[
+				'iterable(mixed[])',
+				'$mixeds',
+			],
+			[
+				'iterable(mixed[])',
+				'$this->returnIterableMixed()',
+			],
+			[
+				'iterable(string[])',
+				'$this->returnIterableString()',
+			],
+			[
+				'int|iterable(string[])',
+				'$this->iterablePropertyAlsoWithSomethingElse',
+			],
+			[
+				'int|iterable(int[]|string[])',
+				'$this->iterablePropertyWithTwoItemTypes',
 			],
 		];
 	}
@@ -2278,9 +2876,6 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 		string $expression
 	)
 	{
-		if (self::isObsoletePhpParserVersion()) {
-			$this->markTestSkipped('Test requires PHP-Parser ^3.0.0');
-		}
 		$this->assertTypes(
 			__DIR__ . '/data/iterable.php',
 			$description,
@@ -2317,9 +2912,6 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 		string $expression
 	)
 	{
-		if (self::isObsoletePhpParserVersion()) {
-			$this->markTestSkipped('Test requires PHP-Parser ^3.0.0');
-		}
 		$this->assertTypes(
 			__DIR__ . '/data/void.php',
 			$description,
@@ -2360,9 +2952,6 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 		string $expression
 	)
 	{
-		if (self::isObsoletePhpParserVersion()) {
-			$this->markTestSkipped('Test requires PHP-Parser ^3.0.0');
-		}
 		$this->assertTypes(
 			__DIR__ . '/data/nullable-returnTypes.php',
 			$description,
@@ -2579,6 +3168,16 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 				'$fooOrStringOrNull',
 				"'anotherStringForSure';",
 			],
+			[
+				'null',
+				'$this->bar',
+				"'propertyNullForSure';",
+			],
+			[
+				'TypeElimination\Bar',
+				'$this->bar',
+				"'propertyNotNullForSure';",
+			],
 		];
 	}
 
@@ -2766,6 +3365,23 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 		);
 	}
 
+	/**
+	 * @dataProvider dataFinally
+	 * @param string $description
+	 * @param string $expression
+	 */
+	public function testFinallyWithEarlyTermination(
+		string $description,
+		string $expression
+	)
+	{
+		$this->assertTypes(
+			__DIR__ . '/data/finally-with-early-termination.php',
+			$description,
+			$expression
+		);
+	}
+
 	public function dataInheritDocFromInterface(): array
 	{
 		return [
@@ -2803,24 +3419,45 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 	)
 	{
 		$this->processFile($file, function (\PhpParser\Node $node, Scope $scope) use ($description, $expression, $evaluatedPointExpression) {
-			$printedNode = $this->printer->prettyPrint([$node]);
+			$printer = new \PhpParser\PrettyPrinter\Standard();
+			$printedNode = $printer->prettyPrint([$node]);
 			if ($printedNode === $evaluatedPointExpression) {
-				/** @var \PhpParser\Node\Expr $expression */
-				$expression = $this->getParser()->parseString(sprintf('<?php %s;', $expression))[0];
-				$type = $scope->getType($expression);
-				$this->assertTypeDescribe($description, $type->describe());
+				/** @var \PhpParser\Node\Expr $expressionNode */
+				$expressionNode = $this->getParser()->parseString(sprintf('<?php %s;', $expression))[0];
+				$type = $scope->getType($expressionNode);
+				$this->assertTypeDescribe(
+					$description,
+					$type->describe(),
+					sprintf('%s at %s', $expression, $evaluatedPointExpression)
+				);
 			}
 		}, $dynamicMethodReturnTypeExtensions, $dynamicStaticMethodReturnTypeExtensions);
 	}
 
 	private function processFile(string $file, \Closure $callback, array $dynamicMethodReturnTypeExtensions = [], array $dynamicStaticMethodReturnTypeExtensions = [])
 	{
-		$this->resolver->processNodes(
+		$printer = new \PhpParser\PrettyPrinter\Standard();
+		$resolver = new NodeScopeResolver(
+			$this->createBroker(),
+			$this->getParser(),
+			$printer,
+			new FileTypeMapper($this->getParser(), $this->createMock(Cache::class)),
+			new \PhpParser\BuilderFactory(),
+			new FileHelper('/'),
+			true,
+			true,
+			[
+				\EarlyTermination\Foo::class => [
+					'doFoo',
+				],
+			]
+		);
+		$resolver->processNodes(
 			$this->getParser()->parseFile($file),
 			new Scope(
 				$this->createBroker($dynamicMethodReturnTypeExtensions, $dynamicStaticMethodReturnTypeExtensions),
-				$this->printer,
-				new TypeSpecifier($this->printer),
+				$printer,
+				new TypeSpecifier($printer),
 				$file
 			),
 			$callback
@@ -2863,21 +3500,19 @@ class NodeScopeResolverTest extends \PHPStan\TestCase
 	{
 		$this->processFile(__DIR__ . '/data/early-termination.php', function (\PhpParser\Node $node, Scope $scope) {
 			if ($node instanceof Exit_) {
-				$this->assertTrue($scope->hasVariableType('something'));
-				$this->assertTrue($scope->hasVariableType('var'));
+				$this->assertTrue($scope->hasVariableType('something')->yes());
+				$this->assertTrue($scope->hasVariableType('var')->yes());
+				$this->assertTrue($scope->hasVariableType('foo')->no());
 			}
 		});
 	}
 
-	private function assertTypeDescribe(string $expectedDescription, string $actualDescription)
+	private function assertTypeDescribe(string $expectedDescription, string $actualDescription, string $label = '')
 	{
 		$this->assertEquals(
-			explode('|', $expectedDescription),
-			explode('|', $actualDescription),
-			'',
-			0.0,
-			10,
-			true
+			$expectedDescription,
+			$actualDescription,
+			$label
 		);
 	}
 

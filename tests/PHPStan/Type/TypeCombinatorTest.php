@@ -82,8 +82,8 @@ class TypeCombinatorTest extends \PHPStan\TestCase
 	)
 	{
 		$result = TypeCombinator::addNull($type);
-		$this->assertInstanceOf($expectedTypeClass, $result);
 		$this->assertSame($expectedTypeDescription, $result->describe());
+		$this->assertInstanceOf($expectedTypeClass, $result);
 	}
 
 	/**
@@ -99,8 +99,8 @@ class TypeCombinatorTest extends \PHPStan\TestCase
 	)
 	{
 		$result = TypeCombinator::combine($type, new NullType());
-		$this->assertInstanceOf($expectedTypeClass, $result);
 		$this->assertSame($expectedTypeDescription, $result->describe());
+		$this->assertInstanceOf($expectedTypeClass, $result);
 	}
 
 	public function dataRemoveNull(): array
@@ -192,150 +192,210 @@ class TypeCombinatorTest extends \PHPStan\TestCase
 	)
 	{
 		$result = TypeCombinator::removeNull($type);
-		$this->assertInstanceOf($expectedTypeClass, $result);
 		$this->assertSame($expectedTypeDescription, $result->describe());
+		$this->assertInstanceOf($expectedTypeClass, $result);
 	}
 
 	public function dataCombine(): array
 	{
 		return [
 			[
-				new StringType(),
-				new NullType(),
+				[
+					new StringType(),
+					new NullType(),
+				],
 				CommonUnionType::class,
 				'string|null',
 			],
 			[
-				new StringType(),
-				new IntegerType(),
+				[
+					new StringType(),
+					new IntegerType(),
+				],
 				CommonUnionType::class,
 				'int|string',
 			],
 			[
-				new CommonUnionType([
+				[
+					new CommonUnionType([
+						new StringType(),
+						new IntegerType(),
+					]),
 					new StringType(),
-					new IntegerType(),
-				]),
-				new StringType(),
+				],
 				CommonUnionType::class,
 				'int|string',
 			],
 			[
-				new CommonUnionType([
-					new StringType(),
-					new IntegerType(),
-				]),
-				new TrueBooleanType(),
+				[
+					new CommonUnionType([
+						new StringType(),
+						new IntegerType(),
+					]),
+					new TrueBooleanType(),
+				],
 				CommonUnionType::class,
 				'int|string|true',
 			],
 			[
-				new CommonUnionType([
-					new StringType(),
-					new IntegerType(),
-				]),
-				new NullType(),
-				CommonUnionType::class,
-				'int|string|null',
-			],
-			[
-				new CommonUnionType([
-					new StringType(),
-					new IntegerType(),
+				[
+					new CommonUnionType([
+						new StringType(),
+						new IntegerType(),
+					]),
 					new NullType(),
-				]),
-				new NullType(),
+				],
 				CommonUnionType::class,
 				'int|string|null',
 			],
 			[
-				new CommonUnionType([
+				[
+					new CommonUnionType([
+						new StringType(),
+						new IntegerType(),
+						new NullType(),
+					]),
+					new NullType(),
+				],
+				CommonUnionType::class,
+				'int|string|null',
+			],
+			[
+				[
+					new CommonUnionType([
+						new StringType(),
+						new IntegerType(),
+					]),
 					new StringType(),
-					new IntegerType(),
-				]),
-				new StringType(),
+				],
 				CommonUnionType::class,
 				'int|string',
 			],
 			[
-				new UnionIterableType(
-					new IntegerType(),
-					[
-						new ObjectType('ArrayObject'),
-					]
-				),
-				new StringType(),
+				[
+					new UnionIterableType(
+						new IntegerType(),
+						[
+							new ObjectType('ArrayObject'),
+						]
+					),
+					new StringType(),
+				],
 				UnionIterableType::class,
 				'int[]|ArrayObject|string',
 			],
 			[
-				new UnionIterableType(
-					new IntegerType(),
-					[
-						new ObjectType('ArrayObject'),
-					]
-				),
-				new ArrayType(new StringType()),
+				[
+					new UnionIterableType(
+						new IntegerType(),
+						[
+							new ObjectType('ArrayObject'),
+						]
+					),
+					new ArrayType(new StringType()),
+				],
 				CommonUnionType::class,
 				'ArrayObject|int[]|string[]',
 			],
 			[
-				new CommonUnionType([
-					new TrueBooleanType(),
-					new IntegerType(),
-				]),
-				new ArrayType(new StringType()),
+				[
+					new CommonUnionType([
+						new TrueBooleanType(),
+						new IntegerType(),
+					]),
+					new ArrayType(new StringType()),
+				],
 				UnionIterableType::class,
 				'string[]|int|true',
 			],
 			[
-				new CommonUnionType([
-					new ArrayType(new ObjectType('Foo')),
-					new ArrayType(new ObjectType('Bar')),
-				]),
-				new ArrayType(new MixedType()),
+				[
+					new CommonUnionType([
+						new ArrayType(new ObjectType('Foo')),
+						new ArrayType(new ObjectType('Bar')),
+					]),
+					new ArrayType(new MixedType()),
+				],
 				CommonUnionType::class,
 				'Bar[]|Foo[]|mixed[]',
+			],
+			[
+				[
+					new IterableIterableType(new MixedType()),
+					new ArrayType(new StringType()),
+				],
+				IterableIterableType::class,
+				'iterable(string[])',
+			],
+			[
+				[
+					new IterableIterableType(new MixedType()),
+					new ArrayType(new MixedType()),
+				],
+				IterableIterableType::class,
+				'iterable(mixed[])',
+			],
+			[
+				[
+					new ArrayType(new StringType()),
+				],
+				ArrayType::class,
+				'string[]',
+			],
+			[
+				[
+					new ObjectType('ArrayObject'),
+					new ObjectType('ArrayIterator'),
+					new ArrayType(new StringType()),
+				],
+				UnionIterableType::class,
+				'string[]|ArrayIterator|ArrayObject',
+			],
+			[
+				[
+					new ObjectType('ArrayObject'),
+					new ObjectType('ArrayIterator'),
+					new ArrayType(new StringType()),
+					new ArrayType(new IntegerType()),
+				],
+				CommonUnionType::class,
+				'ArrayIterator|ArrayObject|int[]|string[]',
 			],
 		];
 	}
 
 	/**
 	 * @dataProvider dataCombine
-	 * @param \PHPStan\Type\Type $firstType
-	 * @param \PHPStan\Type\Type $secondType
+	 * @param \PHPStan\Type\Type[] $types
 	 * @param string $expectedTypeClass
 	 * @param string $expectedTypeDescription
 	 */
 	public function testCombine(
-		Type $firstType,
-		Type $secondType,
+		array $types,
 		string $expectedTypeClass,
 		string $expectedTypeDescription
 	)
 	{
-		$result = TypeCombinator::combine($firstType, $secondType);
-		$this->assertInstanceOf($expectedTypeClass, $result);
+		$result = TypeCombinator::combine(...$types);
 		$this->assertSame($expectedTypeDescription, $result->describe());
+		$this->assertInstanceOf($expectedTypeClass, $result);
 	}
 
 	/**
 	 * @dataProvider dataCombine
-	 * @param \PHPStan\Type\Type $firstType
-	 * @param \PHPStan\Type\Type $secondType
+	 * @param \PHPStan\Type\Type[] $types
 	 * @param string $expectedTypeClass
 	 * @param string $expectedTypeDescription
 	 */
 	public function testCombineInversed(
-		Type $firstType,
-		Type $secondType,
+		array $types,
 		string $expectedTypeClass,
 		string $expectedTypeDescription
 	)
 	{
-		$result = TypeCombinator::combine($secondType, $firstType);
-		$this->assertInstanceOf($expectedTypeClass, $result);
+		$result = TypeCombinator::combine(...array_reverse($types));
 		$this->assertSame($expectedTypeDescription, $result->describe());
+		$this->assertInstanceOf($expectedTypeClass, $result);
 	}
 
 	public function dataRemove(): array
@@ -458,8 +518,8 @@ class TypeCombinatorTest extends \PHPStan\TestCase
 	)
 	{
 		$result = TypeCombinator::remove($fromType, $type);
-		$this->assertInstanceOf($expectedTypeClass, $result);
 		$this->assertSame($expectedTypeDescription, $result->describe());
+		$this->assertInstanceOf($expectedTypeClass, $result);
 	}
 
 }

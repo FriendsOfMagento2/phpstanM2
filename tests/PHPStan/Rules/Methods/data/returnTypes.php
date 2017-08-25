@@ -310,6 +310,29 @@ class Stock
 		return $this->nullableStock;
 	}
 
+	public function returnSelfAgainError(): self
+	{
+		$stock = $this->findStock();
+		if (doFoo()) {
+			$stock = new self();
+		}
+
+		return $stock; // still possible null
+	}
+
+	public function returnsSelfAgainAgain(): self {
+		while (true) {
+			try {
+				if ($this->getActualStock() === null) {
+					continue;
+				}
+			} catch (\Exception $ex) {
+				continue;
+			}
+			return $this->getActualStock();
+		}
+	}
+
 }
 
 class Issue105
@@ -344,4 +367,28 @@ class Issue105
 
 		return $result;
 	}
+}
+
+class ReturningSomethingFromConstructor
+{
+
+	public function __construct()
+	{
+		return new Foo();
+	}
+
+}
+
+class WeirdReturnFormat
+{
+
+	/**
+	 * @return \PHPStan\Foo\Bar |
+	 *         \PHPStan\Foo\Baz
+	 */
+	public function test()
+	{
+		return 1;
+	}
+
 }

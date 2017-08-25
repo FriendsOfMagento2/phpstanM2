@@ -2,11 +2,14 @@
 
 if (foo()) {
 	$ifVar = 1;
+	$issetFoo = new Foo();
+	$maybeDefinedButLaterCertainlyDefined = 1;
 	if ($test) {
 		$ifNestedVar = 1;
 		$ifNotNestedVar = 1;
 	} elseif (fooBar()) {
 		$ifNotNestedVar = 2;
+		$variableOnlyInEarlyTerminatingElse = 1;
 		throw $e;
 	} else {
 		$ifNestedVar = 2;
@@ -14,6 +17,7 @@ if (foo()) {
 	$ifNotVar = 1;
 } elseif (bar()) {
 	$ifVar = 2;
+	$issetFoo = null;
 	$ifNestedVar = 2;
 	$ifNotNestedVar = 2;
 	$ifNotVar = 2;
@@ -21,7 +25,14 @@ if (foo()) {
 	$ifVar = 3;
 	$ifNotNestedVar = 3;
 } else {
+	$variableOnlyInEarlyTerminatingElse = 1;
 	return;
+}
+
+if (foo()) {
+	$maybeDefinedButLaterCertainlyDefined = 2;
+} else {
+	$maybeDefinedButLaterCertainlyDefined = 3;
 }
 
 try {
@@ -53,6 +64,8 @@ doSomething($one, $callParameter = 3);
 $arrTwo[] = new Foo([
 	$inArray = 1,
 ]);
+$arrThree = null;
+$arrThree[] = 'three';
 preg_match('#.*#', 'foo', $matches);
 if ((bool) preg_match('#.*#', 'foo', $matches3)) {
 	foo();
@@ -73,6 +86,8 @@ switch (foo()) {
 		$switchVar = 2;
 		break;
 	case 3:
+		$anotherNoSwitchVar = 1;
+	case 4:
 	default:
 		$switchVar = 3;
 }
@@ -181,8 +196,8 @@ foreach ($someArray as $someValue) {
 $nullableIntegers = [1, 2, 3];
 $nullableIntegers[] = null;
 
-$mixeds = [1, 2, 3];
-$mixeds[] = 'foo';
+$union = [1, 2, 3];
+$union[] = 'foo';
 
 $$lorem = 'ipsum';
 
@@ -203,12 +218,24 @@ if ($notNullableString === null) {
 	return;
 }
 
+/** @var string|null $anotherNotNullableString */
+$anotherNotNullableString = 'foo';
+if ($anotherNotNullableString !== null) {
+	$alsoNotNullableString = $anotherNotNullableString;
+} else {
+	return;
+}
+
+/** @var Foo|null $notNullableObject */
+$notNullableObject = doFoo();
+if ($notNullableObject === null) {
+	$notNullableObject = new Foo();
+}
+
 /** @var string|null $nullableString */
 $nullableString = 'foo';
 if ($nullableString !== null) {
-	$alsoNotNullableString = $nullableString;
-} else {
-	return;
+	$whatever = $nullableString;
 }
 
 $arrayOfIntegers = [1, 2, 3];
@@ -227,8 +254,12 @@ try {
 	$exception = $e;
 	if (something()) {
 		bar();
-	} elseif (foo() || $foo = exists() || preg_match('#.*#', $subject, $matches2) || isset($issetBar)) {
-		for ($i = 0; $i < 5; $i++, $f = $i) {
+	} elseif (foo() || $foo = exists() || preg_match('#.*#', $subject, $matches2) || isset($issetFoo, $issetBar)) {
+		$anotherF = 1;
+		for ($i = 0; $i < 5; $i++, $f = $i, $anotherF = $i) {
+			$arr = [
+				[1, 2],
+			];
 			foreach ($arr as list($listOne, $listTwo)) {
 				if (is_array($arrayOfIntegers)) {
 					(bool)preg_match('~.*~', $attributes, $ternaryMatches) ? die : null;

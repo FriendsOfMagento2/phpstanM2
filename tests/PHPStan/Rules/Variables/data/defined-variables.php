@@ -128,7 +128,7 @@ echo $variableAssignedInForeach;
 
 $someArray[$variableDefinedInDimFetch = 1];
 
-if (isset($_[$variableAssignedInIsset = 123]) && $variableAssignedInIsset > 0) {
+if (isset($anotherAnotherInIsset::$anotherInIsset::$_[$variableAssignedInIsset = 123]) && $variableAssignedInIsset > 0) {
 	doFoo($variableAssignedInIsset); // defined here
 }
 doFoo($variableAssignedInIsset);
@@ -243,12 +243,21 @@ foreach ($someArray as $someKey => list($destructuredAa, $destructuredBb, list($
 
 }
 
+for ($forI = 0; $forI < 10, $forK = 5; $forI++, $forK++, $forJ = $forI) {
+	echo $forI;
+}
+
+echo $forI;
+echo $forJ;
+
 try {
+	$variableDefinedInTry = 1;
 	$variableDefinedInTryAndAllCatches = 1;
 } catch (\FooException $e) {
 	$variableDefinedInTryAndAllCatches = 1;
 	$variableAvailableInAllCatches = 1;
 	$variableDefinedOnlyInOneCatch = 'foo';
+	echo $variableDefinedInTry;
 } catch (\BarException $e) {
 	$variableDefinedInTryAndAllCatches = 1;
 	$variableAvailableInAllCatches = 2;
@@ -261,3 +270,44 @@ try {
 }
 
 echo $variableDefinedInFinally;
+
+list(, $variableInListWithMissingItem) = $someArray;
+echo $variableInListWithMissingItem;
+
+$variableInBitwiseAndAssign &= $anotherVariableBitwiseAndAssign = doFoo();
+echo $variableInBitwiseAndAssign;
+echo $anotherVariableBitwiseAndAssign;
+
+do {
+ echo $mightBeUndefinedInDoWhile;
+ $definedInDoWhile = 1;
+} while ($mightBeUndefinedInDoWhile = 1);
+
+echo $definedInDoWhile;
+
+switch (true) {
+	case $variableInFirstCase = false:
+		echo $variableInSecondCase; // does not exist yet
+	case $variableInSecondCase = false:
+		echo $variableInFirstCase;
+		echo $variableInSecondCase;
+		echo $variableAssignedInSecondCase = true;
+		break;
+	case whatever():
+		echo $variableInFirstCase;
+		echo $variableInSecondCase;
+		$variableInFallthroughCase = true;
+		echo $variableAssignedInSecondCase; // surely undefined
+	case foo():
+		echo $variableInFallthroughCase; // might be undefined
+		echo $variableInFirstCase;
+	default:
+
+}
+
+switch (true) {
+	default:
+		$variableFromDefaultFirst = true;
+	case 1:
+		echo $variableFromDefaultFirst; // might be undefined
+}

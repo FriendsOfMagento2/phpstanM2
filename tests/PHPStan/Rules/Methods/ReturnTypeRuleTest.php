@@ -164,6 +164,18 @@ class ReturnTypeRuleTest extends \PHPStan\Rules\AbstractRuleTest
 				'Method ReturnTypes\Stock::getAnotherStock() should return ReturnTypes\Stock but returns ReturnTypes\Stock|null.',
 				265,
 			],
+			[
+				'Method ReturnTypes\Stock::returnSelfAgainError() should return ReturnTypes\Stock but returns ReturnTypes\Stock|null.',
+				320,
+			],
+			[
+				'Method ReturnTypes\ReturningSomethingFromConstructor::__construct() with return type void returns ReturnTypes\Foo but should not return anything.',
+				377,
+			],
+			[
+				'Method ReturnTypes\WeirdReturnFormat::test() should return PHPStan\Foo\Bar but returns int.',
+				391,
+			],
 		]);
 	}
 
@@ -225,6 +237,23 @@ class ReturnTypeRuleTest extends \PHPStan\Rules\AbstractRuleTest
 	public function testReturnStaticFromParent()
 	{
 		$this->analyse([__DIR__ . '/data/return-static-from-parent.php'], []);
+	}
+
+	/**
+	 * @requires PHP 7.1
+	 */
+	public function testReturnIterable()
+	{
+		$this->analyse([__DIR__ . '/data/returnTypes-iterable.php'], [
+			[
+				'Method ReturnTypesIterable\Foo::stringIterable() should return iterable(string[]) but returns int[].',
+				27,
+			],
+			[
+				'Method ReturnTypesIterable\Foo::stringIterablePipe() should return iterable(string[]) but returns int[].',
+				36,
+			],
+		]);
 	}
 
 }

@@ -59,7 +59,7 @@ class TypeCombinator
 
 		$types = [];
 		$iterableTypes = [];
-		if ($fromType->isIterable() === Type::RESULT_YES && !$fromType instanceof ObjectType && !$fromType instanceof StaticType) {
+		if ($fromType->isIterable()->yes() && !$fromType instanceof ObjectType && !$fromType instanceof StaticType) {
 			$iterableTypes[] = $fromType;
 		}
 		foreach ($fromType->getTypes() as $innerType) {
@@ -73,7 +73,7 @@ class TypeCombinator
 				continue;
 			}
 
-			if ($innerType->isIterable() === Type::RESULT_YES && !$innerType instanceof ObjectType && !$innerType instanceof StaticType) {
+			if ($innerType->isIterable()->yes() && !$innerType instanceof ObjectType && !$innerType instanceof StaticType) {
 				$iterableTypes[] = $innerType;
 			} else {
 				$types[] = $innerType;
@@ -117,26 +117,33 @@ class TypeCombinator
 		return $type instanceof NullType;
 	}
 
-	public static function combine(Type $firstType, Type $secondType): Type
+	public static function combine(Type ...$typesToCombine): Type
 	{
+		if (count($typesToCombine) === 1) {
+			return $typesToCombine[0];
+		}
+
 		$types = [];
 		$iterableTypes = [];
+		$iterableIterableTypes = [];
 
-		foreach ([$firstType, $secondType] as $type) {
+		foreach ($typesToCombine as $type) {
 			$alreadyAdded = false;
 			if ($type instanceof UnionType) {
 				$alreadyAdded = true;
 				foreach ($type->getTypes() as $innerType) {
-					if ($innerType->isIterable() === Type::RESULT_YES && !$innerType instanceof ObjectType && !$innerType instanceof StaticType) {
-						$iterableTypes[$innerType->describe()] = $innerType;
+					if ($innerType->isIterable()->yes() && !$innerType instanceof ObjectType && !$innerType instanceof StaticType) {
+						$iterableIterableTypes[$innerType->describe()] = $innerType;
+						$iterableTypes[$innerType->getIterableValueType()->describe()] = $innerType->getIterableValueType();
 					} else {
 						$types[$innerType->describe()] = $innerType;
 					}
 				}
 			}
-			if ($type->isIterable() === Type::RESULT_YES && !$type instanceof ObjectType && !$type instanceof StaticType) {
+			if ($type->isIterable()->yes() && !$type instanceof ObjectType && !$type instanceof StaticType) {
 				$alreadyAdded = true;
-				$iterableTypes[$type->getIterableValueType()->describe()] = new ArrayType($type->getIterableValueType());
+				$iterableIterableTypes[$type->describe()] = $type;
+				$iterableTypes[$type->getIterableValueType()->describe()] = $type->getIterableValueType();
 			}
 			if (!$alreadyAdded) {
 				$types[$type->describe()] = $type;
@@ -178,14 +185,49 @@ class TypeCombinator
 		$types = array_values($types);
 		/** @var \PHPStan\Type\Type[] $iterableTypes */
 		$iterableTypes = array_values($iterableTypes);
+		/** @var \PHPStan\Type\Type[] $iterableTypes */
+		$iterableIterableTypes = array_values($iterableIterableTypes);
 
-		if (count($iterableTypes) === 1) {
-			if (count($types) > 0) {
-				return new UnionIterableType($iterableTypes[0]->getIterableValueType(), $types);
+		$exactlyOneIterableIterableType = null;
+		$otherIterableTypes = [];
+		foreach ($iterableIterableTypes as $iterableIterableType) {
+			if ($iterableIterableType instanceof IterableIterableType && $iterableIterableType->getIterableValueType() instanceof MixedType) {
+				if ($exactlyOneIterableIterableType === null) {
+					$exactlyOneIterableIterableType = $iterableIterableType;
+				} else {
+					$exactlyOneIterableIterableType = null;
+					break;
+				}
+			} else {
+				$otherIterableTypes[] = $iterableIterableType;
 			}
-			return $iterableTypes[0];
 		}
-		$types = array_merge($types, $iterableTypes);
+
+		if (
+			$exactlyOneIterableIterableType !== null
+			&& count($otherIterableTypes) > 0
+		) {
+
+			$iterableIterableType = new IterableIterableType(
+				count($otherIterableTypes) === 1
+					? $otherIterableTypes[0]->getIterableValueType()
+					: new CommonUnionType(array_map(function (Type $iterableType): Type {
+						return $iterableType->getIterableValueType();
+					}, $otherIterableTypes))
+			);
+			if (count($types) === 0) {
+				return $iterableIterableType;
+			}
+			return new CommonUnionType(array_merge($types, [$iterableIterableType]));
+		} elseif (count($iterableIterableTypes) === 1) {
+			if (count($types) > 0) {
+				return new UnionIterableType($iterableIterableTypes[0]->getIterableValueType(), $types);
+			}
+			return $iterableIterableTypes[0];
+		}
+		$types = array_merge($types, array_map(function (Type $type): Type {
+			return new ArrayType($type);
+		}, $iterableTypes));
 		if (count($types) > 1) {
 			return new CommonUnionType($types);
 		}

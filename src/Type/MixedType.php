@@ -2,8 +2,20 @@
 
 namespace PHPStan\Type;
 
-class MixedType implements Type
+use PHPStan\TrinaryLogic;
+
+class MixedType implements CompoundType
 {
+
+	/**
+	 * @var bool
+	 */
+	private $isExplicitMixed;
+
+	public function __construct(bool $isExplicitMixed = false)
+	{
+		$this->isExplicitMixed = $isExplicitMixed;
+	}
 
 	/**
 	 * @return string|null
@@ -51,9 +63,9 @@ class MixedType implements Type
 		return true;
 	}
 
-	public function isIterable(): int
+	public function isIterable(): TrinaryLogic
 	{
-		return self::RESULT_MAYBE;
+		return TrinaryLogic::createMaybe();
 	}
 
 	public function getIterableKeyType(): Type
@@ -64,6 +76,16 @@ class MixedType implements Type
 	public function getIterableValueType(): Type
 	{
 		return new MixedType();
+	}
+
+	public function isExplicitMixed(): bool
+	{
+		return $this->isExplicitMixed;
+	}
+
+	public static function __set_state(array $properties): Type
+	{
+		return new self($properties['isExplicitMixed']);
 	}
 
 }

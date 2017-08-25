@@ -10,7 +10,6 @@ use PHPStan\Reflection\ParametersAcceptor;
 use PHPStan\Type\ArrayType;
 use PHPStan\Type\IterableIterableType;
 use PHPStan\Type\StringType;
-use PHPStan\Type\Type;
 use PHPStan\Type\VoidType;
 
 class FunctionCallParametersCheck
@@ -25,15 +24,20 @@ class FunctionCallParametersCheck
 	/** @var bool */
 	private $checkArgumentTypes;
 
+	/** @var bool */
+	private $checkArgumentsPassedByReference;
+
 	public function __construct(
 		Broker $broker,
 		RuleLevelHelper $ruleLevelHelper,
-		bool $checkArgumentTypes
+		bool $checkArgumentTypes,
+		bool $checkArgumentsPassedByReference
 	)
 	{
 		$this->broker = $broker;
 		$this->ruleLevelHelper = $ruleLevelHelper;
 		$this->checkArgumentTypes = $checkArgumentTypes;
+		$this->checkArgumentsPassedByReference = $checkArgumentsPassedByReference;
 	}
 
 	/**
@@ -124,7 +128,7 @@ class FunctionCallParametersCheck
 			$errors[] = $messages[7];
 		}
 
-		if (!$this->checkArgumentTypes) {
+		if (!$this->checkArgumentTypes && !$this->checkArgumentsPassedByReference) {
 			return $errors;
 		}
 
@@ -158,7 +162,7 @@ class FunctionCallParametersCheck
 
 			$argumentValueType = $scope->getType($argument->value);
 			$secondAccepts = null;
-			if ($parameterType->isIterable() === Type::RESULT_YES && $parameter->isVariadic()) {
+			if ($parameterType->isIterable()->yes() && $parameter->isVariadic()) {
 				$secondAccepts = $this->ruleLevelHelper->accepts(
 					new IterableIterableType($parameterType->getIterableValueType()),
 					$argumentValueType
@@ -166,7 +170,8 @@ class FunctionCallParametersCheck
 			}
 
 			if (
-				!$this->ruleLevelHelper->accepts($parameterType, $argumentValueType)
+				$this->checkArgumentTypes
+				&& !$this->ruleLevelHelper->accepts($parameterType, $argumentValueType)
 				&& ($secondAccepts === null || !$secondAccepts)
 				&& (
 					!($parameterType instanceof StringType)
@@ -187,7 +192,8 @@ class FunctionCallParametersCheck
 			}
 
 			if (
-				$parameter->isPassedByReference()
+				$this->checkArgumentsPassedByReference
+				&& $parameter->isPassedByReference()
 				&& !$argument->value instanceof \PhpParser\Node\Expr\Variable
 				&& !$argument->value instanceof \PhpParser\Node\Expr\ArrayDimFetch
 				&& !$argument->value instanceof \PhpParser\Node\Expr\PropertyFetch

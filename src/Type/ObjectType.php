@@ -3,11 +3,10 @@
 namespace PHPStan\Type;
 
 use PHPStan\Broker\Broker;
+use PHPStan\TrinaryLogic;
 
 class ObjectType implements Type
 {
-
-	use ClassTypeHelperTrait;
 
 	/** @var string */
 	private $class;
@@ -41,16 +40,12 @@ class ObjectType implements Type
 
 	public function accepts(Type $type): bool
 	{
-		if ($type instanceof MixedType) {
-			return true;
-		}
-
 		if ($type instanceof StaticType) {
 			return $this->checkSubclassAcceptability($type->getBaseClass());
 		}
 
-		if ($type instanceof UnionType) {
-			return UnionTypeHelper::acceptsAll($this, $type);
+		if ($type instanceof CompoundType) {
+			return CompoundTypeHelper::accepts($type, $this);
 		}
 
 		if ($type->getClass() === null) {
@@ -66,12 +61,14 @@ class ObjectType implements Type
 			return true;
 		}
 
-		if (!$this->exists($this->getClass()) || !$this->exists($thatClass)) {
+		$broker = Broker::getInstance();
+
+		if (!$broker->hasClass($this->getClass()) || !$broker->hasClass($thatClass)) {
 			return false;
 		}
 
-		$thisReflection = new \ReflectionClass($this->getClass());
-		$thatReflection = new \ReflectionClass($thatClass);
+		$thisReflection = $broker->getClass($this->getClass());
+		$thatReflection = $broker->getClass($thatClass);
 
 		if ($thisReflection->getName() === $thatReflection->getName()) {
 			// class alias
@@ -79,7 +76,7 @@ class ObjectType implements Type
 		}
 
 		if ($thisReflection->isInterface() && $thatReflection->isInterface()) {
-			return $thatReflection->implementsInterface($this->getClass());
+			return $thatReflection->getNativeReflection()->implementsInterface($this->getClass());
 		}
 
 		return $thatReflection->isSubclassOf($this->getClass());
@@ -105,17 +102,19 @@ class ObjectType implements Type
 		return true;
 	}
 
-	public function isIterable(): int
+	public function isIterable(): TrinaryLogic
 	{
 		$broker = Broker::getInstance();
 
-		if ($broker->hasClass($this->class)) {
-			if ($broker->getClass($this->class)->isSubclassOf(\Traversable::class)) {
-				return self::RESULT_YES;
-			}
+		if (!$broker->hasClass($this->class)) {
+			return TrinaryLogic::createMaybe();
 		}
 
-		return self::RESULT_NO;
+		if ($broker->getClass($this->class)->isSubclassOf(\Traversable::class) || $this->class === \Traversable::class) {
+			return TrinaryLogic::createYes();
+		}
+
+		return TrinaryLogic::createNo();
 	}
 
 	public function getIterableKeyType(): Type
@@ -170,6 +169,11 @@ class ObjectType implements Type
 		}
 
 		return new ErrorType();
+	}
+
+	public static function __set_state(array $properties): Type
+	{
+		return new self($properties['class']);
 	}
 
 }

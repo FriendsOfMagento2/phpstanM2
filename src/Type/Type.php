@@ -2,12 +2,10 @@
 
 namespace PHPStan\Type;
 
+use PHPStan\TrinaryLogic;
+
 interface Type
 {
-
-	const RESULT_YES = 0;
-	const RESULT_MAYBE = 1;
-	const RESULT_NO = 2;
 
 	/**
 	 * @return string|null
@@ -31,10 +29,12 @@ interface Type
 
 	public function isDocumentableNatively(): bool;
 
-	public function isIterable(): int;
+	public function isIterable(): TrinaryLogic;
 
 	public function getIterableKeyType(): Type;
 
 	public function getIterableValueType(): Type;
+
+	public static function __set_state(array $properties): self;
 
 }

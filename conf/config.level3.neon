@@ -8,12 +8,17 @@ services:
 			- phpstan.rules.rule
 
 	-
-		class: PHPStan\Rules\Classes\DefaultValueTypesAssignedToPropertiesRule
+		class: PHPStan\Rules\Arrays\InvalidKeyInArrayDimFetchRule
 		tags:
 			- phpstan.rules.rule
 
 	-
-		class: PHPStan\Rules\Classes\TypesAssignedToPropertiesRule
+		class: PHPStan\Rules\Arrays\InvalidKeyInArrayItemRule
+		tags:
+			- phpstan.rules.rule
+
+	-
+		class: PHPStan\Rules\Arrays\IterableInForeachRule
 		tags:
 			- phpstan.rules.rule
 
@@ -29,6 +34,16 @@ services:
 
 	-
 		class: PHPStan\Rules\Methods\ReturnTypeRule
+		tags:
+			- phpstan.rules.rule
+
+	-
+		class: PHPStan\Rules\Properties\DefaultValueTypesAssignedToPropertiesRule
+		tags:
+			- phpstan.rules.rule
+
+	-
+		class: PHPStan\Rules\Properties\TypesAssignedToPropertiesRule
 		tags:
 			- phpstan.rules.rule
 

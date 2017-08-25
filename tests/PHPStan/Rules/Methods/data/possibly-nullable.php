@@ -1,6 +1,6 @@
 <?php
 
-namespace PossiblyNullable;
+namespace CallingMethodOnPossiblyNullable;
 
 class Test {
 

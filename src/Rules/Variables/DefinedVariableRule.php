@@ -14,14 +14,38 @@ class DefinedVariableRule implements \PHPStan\Rules\Rule
 	 */
 	private $cliArgumentsVariablesRegistered;
 
-	public function __construct(bool $cliArgumentsVariablesRegistered)
+	/**
+	 * @var bool
+	 */
+	private $checkMaybeUndefinedVariables;
+
+	public function __construct(
+		bool $cliArgumentsVariablesRegistered,
+		bool $checkMaybeUndefinedVariables
+	)
 	{
 		$this->cliArgumentsVariablesRegistered = $cliArgumentsVariablesRegistered;
+		$this->checkMaybeUndefinedVariables = $checkMaybeUndefinedVariables;
 	}
 
 	public function getNodeType(): string
 	{
 		return Variable::class;
+	}
+
+	public static function isGlobalVariable(string $variableName): bool
+	{
+		return in_array($variableName, [
+			'GLOBALS',
+			'_SERVER',
+			'_GET',
+			'_POST',
+			'_FILES',
+			'_COOKIE',
+			'_SESSION',
+			'_REQUEST',
+			'_ENV',
+		], true);
 	}
 
 	/**
@@ -35,17 +59,7 @@ class DefinedVariableRule implements \PHPStan\Rules\Rule
 			return [];
 		}
 
-		if (in_array($node->name, [
-			'GLOBALS',
-			'_SERVER',
-			'_GET',
-			'_POST',
-			'_FILES',
-			'_COOKIE',
-			'_SESSION',
-			'_REQUEST',
-			'_ENV',
-		], true)) {
+		if (self::isGlobalVariable($node->name)) {
 			return [];
 		}
 
@@ -59,13 +73,20 @@ class DefinedVariableRule implements \PHPStan\Rules\Rule
 			}
 		}
 
-		if ($scope->isInVariableAssign($node->name)) {
+		if ($scope->isInExpressionAssign($node)) {
 			return [];
 		}
 
-		if (!$scope->hasVariableType($node->name)) {
+		if ($scope->hasVariableType($node->name)->no()) {
 			return [
 				sprintf('Undefined variable: $%s', $node->name),
+			];
+		} elseif (
+			$this->checkMaybeUndefinedVariables
+			&& !$scope->hasVariableType($node->name)->yes()
+		) {
+			return [
+				sprintf('Variable $%s might not be defined.', $node->name),
 			];
 		}
 

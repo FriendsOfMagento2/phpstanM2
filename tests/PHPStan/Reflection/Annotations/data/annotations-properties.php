@@ -24,12 +24,18 @@ class Bar extends Foo
 /**
  * @property   Lorem  $bazProperty
  * @property Dolor $conflictingProperty
+ * @property-write ?Lorem $writeOnlyProperty
  */
 class Baz extends Bar
 {
 
+	use FooTrait;
+
 }
 
+/**
+ * @property int | float $numericBazBazProperty
+ */
 class BazBaz extends Baz
 {
 
@@ -39,6 +45,14 @@ class BazBaz extends Baz
  * @property FooInterface $interfaceProperty
  */
 interface FooInterface
+{
+
+}
+
+/**
+ * @property BazBaz $traitProperty
+ */
+trait FooTrait
 {
 
 }

@@ -2,6 +2,8 @@
 
 namespace PHPStan\Type;
 
+use PHPStan\TrinaryLogic;
+
 class UnionIterableType implements UnionType
 {
 
@@ -76,21 +78,21 @@ class UnionIterableType implements UnionType
 
 	public function accepts(Type $type): bool
 	{
-		if ($type instanceof MixedType) {
-			return true;
-		}
-
 		$accepts = UnionTypeHelper::accepts($this, $type);
 		if ($accepts !== null && !$accepts) {
 			return false;
 		}
 
-		if ($type->isIterable() === self::RESULT_YES) {
+		if ($type->isIterable()->yes()) {
 			return $this->getItemType()->accepts($type->getIterableValueType());
 		}
 
 		if (TypeCombinator::shouldSkipUnionTypeAccepts($this)) {
 			return true;
+		}
+
+		if ($type instanceof CompoundType) {
+			return CompoundTypeHelper::accepts($type, $this);
 		}
 
 		foreach ($this->getTypes() as $otherType) {
@@ -104,7 +106,8 @@ class UnionIterableType implements UnionType
 
 	public function describe(): string
 	{
-		return sprintf('%s[]|%s', $this->getItemType()->describe(), UnionTypeHelper::describe($this->getTypes()));
+		$format = $this->getItemType() instanceof UnionType ? '(%s)[]|%s' : '%s[]|%s';
+		return sprintf($format, $this->getItemType()->describe(), UnionTypeHelper::describe($this->getTypes()));
 	}
 
 	public function canAccessProperties(): bool
@@ -148,9 +151,9 @@ class UnionIterableType implements UnionType
 		);
 	}
 
-	public function isIterable(): int
+	public function isIterable(): TrinaryLogic
 	{
-		return self::RESULT_YES;
+		return TrinaryLogic::createYes();
 	}
 
 	public function getIterableKeyType(): Type
@@ -161,6 +164,11 @@ class UnionIterableType implements UnionType
 	public function getIterableValueType(): Type
 	{
 		return $this->getItemType();
+	}
+
+	public static function __set_state(array $properties): Type
+	{
+		return new self($properties['itemType'], $properties['types']);
 	}
 
 }

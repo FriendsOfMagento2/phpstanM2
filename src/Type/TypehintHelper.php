@@ -3,11 +3,10 @@
 namespace PHPStan\Type;
 
 use PHPStan\Analyser\NameScope;
+use PHPStan\Broker\Broker;
 
 class TypehintHelper
 {
-
-	use ClassTypeHelperTrait;
 
 	public static function getTypeObjectFromTypehint(
 		string $typehintString,
@@ -37,8 +36,9 @@ class TypehintHelper
 			} elseif ($typehintString === '$this' && !$fromReflection) {
 				return new ThisType($selfClass);
 			} elseif ($lowercasedTypehintString === 'parent') {
-				if (self::exists($selfClass)) {
-					$classReflection = new \ReflectionClass($selfClass);
+				$broker = Broker::getInstance();
+				if ($broker->hasClass($selfClass)) {
+					$classReflection = $broker->getClass($selfClass);
 					if ($classReflection->getParentClass() !== false) {
 						return new ObjectType($classReflection->getParentClass()->getName());
 					}
@@ -80,7 +80,7 @@ class TypehintHelper
 				return new ResourceType();
 			case $lowercasedTypehintString === 'object' && !$fromReflection:
 			case $lowercasedTypehintString === 'mixed' && !$fromReflection:
-				return new MixedType();
+				return new MixedType(true);
 			case $lowercasedTypehintString === 'void':
 				return new VoidType();
 			default:
@@ -110,12 +110,12 @@ class TypehintHelper
 			null,
 			true
 		);
-		if ($isVariadic) {
-			$type = new ArrayType($type);
-		}
-
 		if ($reflectionType->allowsNull()) {
 			$type = TypeCombinator::addNull($type);
+		}
+
+		if ($isVariadic) {
+			$type = new ArrayType($type);
 		}
 
 		return self::decideType($type, $phpDocType);
@@ -127,7 +127,7 @@ class TypehintHelper
 	): Type
 	{
 		if ($phpDocType !== null) {
-			if ($type->isIterable() === Type::RESULT_YES && $phpDocType instanceof ArrayType) {
+			if ($type->isIterable()->yes() && $phpDocType instanceof ArrayType) {
 				if ($type instanceof IterableIterableType) {
 					$phpDocType = new IterableIterableType($phpDocType->getItemType());
 				} elseif ($type instanceof ArrayType) {

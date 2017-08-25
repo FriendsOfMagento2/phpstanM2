@@ -40,6 +40,8 @@ use OtherNamespace\Test as OtherTest;
  * @method static self|Bar getFooOrBarStaticallyWithDescriptionNoParams Get a Foo or a Bar with a description statically.
  * @method static bool|string aStaticMethodThatHasAUniqueReturnTypeInThisClassNoParams
  * @method static string|float aStaticMethodThatHasAUniqueReturnTypeInThisClassWithDescriptionNoParams A Description.
+ * @method \Aws\Result publish(array $args = [])
+ * @method Image rotate(float $angle, $backgroundColor)
  *
  * Problem signatures
  * ==================
@@ -79,6 +81,8 @@ class Bar extends Foo
 class Baz extends Bar
 {
 
+	use FooTrait;
+
 }
 
 /**
@@ -90,6 +94,18 @@ class Baz extends Bar
  * @method static OtherTest getTestStaticallyNoParams
  * @method OtherTest getTestWithDescriptionNoParams Get a test
  * @method static OtherTest getTestStaticallyWithDescriptionNoParams Get a test statically
+ *
+ * @method void doSomethingWithSpecificScalarParamsWithoutDefault(int $a, ?int $b, int &$c, ?int &$d)
+ * @method void doSomethingWithSpecificScalarParamsWithDefault(int $a = null, ?int $b = null, int &$c = null, ?int &$d = null)
+ * @method void doSomethingWithSpecificObjectParamsWithoutDefault(Ipsum $a, ?Ipsum $b, Ipsum &$c, ?Ipsum &$d)
+ * @method void doSomethingWithSpecificObjectParamsWithDefault(Ipsum $a = null, ?Ipsum $b = null, Ipsum &$c = null, ?Ipsum &$d = null)
+ * @method void doSomethingWithSpecificVariadicScalarParamsNotNullable(int ...$a)
+ * @method void doSomethingWithSpecificVariadicScalarParamsNullable(?int ...$a)
+ * @method void doSomethingWithSpecificVariadicObjectParamsNotNullable(Ipsum ...$a)
+ * @method void doSomethingWithSpecificVariadicObjectParamsNullable(?Ipsum ...$a)
+ * @method void doSomethingWithComplicatedParameters($a, $b = null, string|bool|int|float|OtherTest $c, string|bool|int|float|OtherTest $d = null)
+ *
+ * @method int | float paramMultipleTypesWithExtraSpaces(string | null $string, OtherTest | null $object)
  */
 class BazBaz extends Baz
 {
@@ -100,6 +116,14 @@ class BazBaz extends Baz
  * @method FooInterface methodFromInterface()
  */
 interface FooInterface
+{
+
+}
+
+/**
+ * @method BazBaz methodFromTrait()
+ */
+trait FooTrait
 {
 
 }

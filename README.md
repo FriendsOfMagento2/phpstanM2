@@ -5,6 +5,8 @@
 [![License](https://poser.pugx.org/phpstan/phpstan/license)](https://packagist.org/packages/phpstan/phpstan)
 [![PHPStan](https://img.shields.io/badge/PHPStan-enabled-brightgreen.svg?style=flat)](https://github.com/phpstan/phpstan)
 
+[![Donate on PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://paypal.me/phpstan)
+
 PHPStan focuses on finding errors in your code without actually running it. It catches whole classes of bugs
 even before you write tests for the code.
 
@@ -14,6 +16,8 @@ PHPStan moves PHP closer to compiled languages in the sense that the correctness
 can be checked before you run the actual line.
 
 **[Read more about PHPStan on Medium.com »](https://medium.com/@ondrejmirtes/phpstan-2939cd0ad0e3)**
+
+**[Try out PHPStan on the on-line playground! »](https://phpstan.org/)**
 
 ## Is PHPStan helping you to avoid bugs in production?
 ## Consider [supporting it on Patreon](https://www.patreon.com/phpstan) so I'm able to make it even more awesome!
@@ -44,7 +48,6 @@ See [Class reflection extensions](#class-reflection-extensions) and [Dynamic ret
 You can also install already created framework-specific extensions:
 
 * [Doctrine](https://github.com/phpstan/phpstan-doctrine)
-* [Guzzle](https://github.com/phpstan/phpstan-guzzle)
 * [Nette Framework](https://github.com/phpstan/phpstan-nette)
 * [Dibi - Database Abstraction Library](https://github.com/phpstan/phpstan-dibi)
 
@@ -99,17 +102,12 @@ making PHPStan suitable to run as part of your continuous integration script.
 
 ## Rule levels
 
-Rule levels. If you want to use PHPStan but your codebase isn't up to speed with strong typing
-and PHPStan's strict checks, you can choose from currently 5 levels
-(0 is the loosest and 4 is the strictest) by passing `--level` to `analyse` command. Default level is `0`.
+If you want to use PHPStan but your codebase isn't up to speed with strong typing
+and PHPStan's strict checks, you can choose from currently 8 levels
+(0 is the loosest and 7 is the strictest) by passing `--level` to `analyse` command. Default level is `0`.
 
 This feature enables incremental adoption of PHPStan checks. You can start using PHPStan
 with a lower rule level and increase it when you feel like it.
-
-There's also **experimental** level 5 that currently enables:
-
-* Union types (Foo|Bar will be a specified type with checks performed on it instead of mixed)
-* Checking function and method argument types when calling them
 
 ## Configuration
 
@@ -370,6 +368,8 @@ class methods like `__get`, `__set` and `__call`. Because PHPStan is all about s
 
 When PHPStan stumbles upon a property or a method that is unknown to built-in class reflection, it iterates
 over all registered class reflection extensions until it finds one that defines the property or method.
+
+Class reflection extension cannot have `PHPStan\Broker\Broker` (service for obtaining class reflections) injected in the constructor due to circular reference issue, but the extensions can implement `PHPStan\Reflection\BrokerAwareClassReflectionExtension` interface to obtain Broker via a setter.
 
 ### Properties class reflection extensions
 

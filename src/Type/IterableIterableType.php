@@ -2,10 +2,12 @@
 
 namespace PHPStan\Type;
 
+use PHPStan\TrinaryLogic;
+
 class IterableIterableType implements StaticResolvableType
 {
 
-	use ClassTypeHelperTrait, IterableTypeTrait;
+	use IterableTypeTrait;
 
 	public function __construct(
 		Type $itemType
@@ -24,7 +26,7 @@ class IterableIterableType implements StaticResolvableType
 
 	public function combineWith(Type $otherType): Type
 	{
-		if ($otherType->isIterable() === self::RESULT_YES) {
+		if ($otherType->isIterable()->yes()) {
 			return new self(
 				$this->getIterableValueType()->combineWith($otherType->getIterableValueType())
 			);
@@ -35,21 +37,12 @@ class IterableIterableType implements StaticResolvableType
 
 	public function accepts(Type $type): bool
 	{
-		if ($type->isIterable() === self::RESULT_YES) {
+		if ($type instanceof CompoundType) {
+			return CompoundTypeHelper::accepts($type, $this);
+		}
+
+		if ($type->isIterable()->yes()) {
 			return $this->getIterableValueType()->accepts($type->getIterableValueType());
-		}
-
-		if ($type->getClass() !== null && $this->exists($type->getClass())) {
-			$classReflection = new \ReflectionClass($type->getClass());
-			return $classReflection->implementsInterface(\Traversable::class);
-		}
-
-		if ($type instanceof MixedType) {
-			return true;
-		}
-
-		if ($type instanceof UnionType) {
-			return UnionTypeHelper::acceptsAll($this, $type);
 		}
 
 		return false;
@@ -57,7 +50,14 @@ class IterableIterableType implements StaticResolvableType
 
 	public function describe(): string
 	{
-		return sprintf('iterable(%s[])', $this->getItemType()->describe());
+		if ($this->getItemType() instanceof UnionType) {
+			$description = implode('|', array_map(function (Type $type): string {
+				return sprintf('%s[]', $type->describe());
+			}, $this->getItemType()->getTypes()));
+		} else {
+			$description = sprintf('%s[]', $this->getItemType()->describe());
+		}
+		return sprintf('iterable(%s)', $description);
 	}
 
 	public function isDocumentableNatively(): bool
@@ -87,9 +87,9 @@ class IterableIterableType implements StaticResolvableType
 		return $this;
 	}
 
-	public function isIterable(): int
+	public function isIterable(): TrinaryLogic
 	{
-		return self::RESULT_YES;
+		return TrinaryLogic::createYes();
 	}
 
 	public function getIterableKeyType(): Type
@@ -100,6 +100,11 @@ class IterableIterableType implements StaticResolvableType
 	public function getIterableValueType(): Type
 	{
 		return $this->getItemType();
+	}
+
+	public static function __set_state(array $properties): Type
+	{
+		return new self($properties['itemType']);
 	}
 
 }

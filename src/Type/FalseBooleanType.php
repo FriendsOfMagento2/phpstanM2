@@ -2,6 +2,8 @@
 
 namespace PHPStan\Type;
 
+use PHPStan\TrinaryLogic;
+
 class FalseBooleanType implements BooleanType
 {
 
@@ -54,7 +56,11 @@ class FalseBooleanType implements BooleanType
 			return true;
 		}
 
-		return $type instanceof MixedType;
+		if ($type instanceof CompoundType) {
+			return CompoundTypeHelper::accepts($type, $this);
+		}
+
+		return false;
 	}
 
 	public function isDocumentableNatively(): bool
@@ -62,9 +68,9 @@ class FalseBooleanType implements BooleanType
 		return true;
 	}
 
-	public function isIterable(): int
+	public function isIterable(): TrinaryLogic
 	{
-		return self::RESULT_NO;
+		return TrinaryLogic::createNo();
 	}
 
 	public function getIterableKeyType(): Type
@@ -75,6 +81,11 @@ class FalseBooleanType implements BooleanType
 	public function getIterableValueType(): Type
 	{
 		return new ErrorType();
+	}
+
+	public static function __set_state(array $properties): Type
+	{
+		return new self();
 	}
 
 }

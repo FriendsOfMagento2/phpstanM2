@@ -2,6 +2,8 @@
 
 namespace PHPStan\Type;
 
+use PHPStan\TrinaryLogic;
+
 class VoidType implements Type
 {
 
@@ -32,7 +34,7 @@ class VoidType implements Type
 
 	public function accepts(Type $type): bool
 	{
-		return $type instanceof self || $type instanceof MixedType;
+		return $type instanceof self;
 	}
 
 	public function describe(): string
@@ -55,9 +57,9 @@ class VoidType implements Type
 		return true;
 	}
 
-	public function isIterable(): int
+	public function isIterable(): TrinaryLogic
 	{
-		return self::RESULT_NO;
+		return TrinaryLogic::createNo();
 	}
 
 	public function getIterableKeyType(): Type
@@ -68,6 +70,11 @@ class VoidType implements Type
 	public function getIterableValueType(): Type
 	{
 		return new ErrorType();
+	}
+
+	public static function __set_state(array $properties): Type
+	{
+		return new self();
 	}
 
 }

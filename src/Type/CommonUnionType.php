@@ -2,6 +2,8 @@
 
 namespace PHPStan\Type;
 
+use PHPStan\TrinaryLogic;
+
 class CommonUnionType implements UnionType
 {
 
@@ -64,13 +66,8 @@ class CommonUnionType implements UnionType
 
 	public function accepts(Type $type): bool
 	{
-		if ($type instanceof MixedType) {
-			return true;
-		}
-
-		$accepts = UnionTypeHelper::accepts($this, $type);
-		if ($accepts !== null) {
-			return $accepts;
+		if ($type instanceof CompoundType) {
+			return CompoundTypeHelper::accepts($type, $this);
 		}
 
 		if (TypeCombinator::shouldSkipUnionTypeAccepts($this)) {
@@ -116,9 +113,9 @@ class CommonUnionType implements UnionType
 		return new self(UnionTypeHelper::changeBaseClass($className, $this->getTypes()));
 	}
 
-	public function isIterable(): int
+	public function isIterable(): TrinaryLogic
 	{
-		return self::RESULT_NO;
+		return TrinaryLogic::createNo();
 	}
 
 	public function getIterableKeyType(): Type
@@ -129,6 +126,11 @@ class CommonUnionType implements UnionType
 	public function getIterableValueType(): Type
 	{
 		return new MixedType();
+	}
+
+	public static function __set_state(array $properties): Type
+	{
+		return new self($properties['types']);
 	}
 
 }

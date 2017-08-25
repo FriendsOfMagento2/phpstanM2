@@ -4,14 +4,7 @@ parameters:
 
 services:
 	-
-		class: PHPStan\Rules\Classes\AccessPropertiesRule
-		arguments:
-			checkThisOnly: %checkThisOnly%
-		tags:
-			- phpstan.rules.rule
-
-	-
-		class: PHPStan\Rules\Classes\AccessStaticPropertiesRule
+		class: PHPStan\Rules\Arrays\DuplicateKeysInLiteralArraysRule
 		tags:
 			- phpstan.rules.rule
 
@@ -22,11 +15,6 @@ services:
 
 	-
 		class: PHPStan\Rules\Classes\ExistingClassInInstanceOfRule
-		tags:
-			- phpstan.rules.rule
-
-	-
-		class: PHPStan\Rules\Classes\ExistingClassesInPropertiesRule
 		tags:
 			- phpstan.rules.rule
 
@@ -106,6 +94,52 @@ services:
 
 	-
 		class: PHPStan\Rules\Methods\ExistingClassesInTypehintsRule
+		tags:
+			- phpstan.rules.rule
+
+	-
+		class: PHPStan\Rules\Properties\AccessPropertiesRule
+		arguments:
+			checkThisOnly: %checkThisOnly%
+		tags:
+			- phpstan.rules.rule
+
+	-
+		class: PHPStan\Rules\Properties\AccessStaticPropertiesRule
+		tags:
+			- phpstan.rules.rule
+
+	-
+		class: PHPStan\Rules\Properties\ExistingClassesInPropertiesRule
+		tags:
+			- phpstan.rules.rule
+
+	-
+		class: PHPStan\Rules\Properties\WritingToReadOnlyPropertiesRule
+		arguments:
+			checkThisOnly: %checkThisOnly%
+		tags:
+			- phpstan.rules.rule
+
+	-
+		class: PHPStan\Rules\Properties\ReadingWriteOnlyPropertiesRule
+		arguments:
+			checkThisOnly: %checkThisOnly%
+		tags:
+			- phpstan.rules.rule
+
+	-
+		class: PHPStan\Rules\Variables\DefinedVariableRule
+		arguments:
+			cliArgumentsVariablesRegistered: %cliArgumentsVariablesRegistered%
+			checkMaybeUndefinedVariables: %checkMaybeUndefinedVariables%
+		tags:
+			- phpstan.rules.rule
+
+	-
+		class: PHPStan\Rules\Variables\DefinedVariableInAnonymousFunctionUseRule
+		arguments:
+			checkMaybeUndefinedVariables: %checkMaybeUndefinedVariables%
 		tags:
 			- phpstan.rules.rule
 

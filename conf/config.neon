@@ -6,6 +6,8 @@ parameters:
 	fileExtensions:
 		- php
 	checkFunctionArgumentTypes: false
+	checkArgumentsPassedByReference: false
+	checkMaybeUndefinedVariables: false
 	checkNullables: false
 	checkUnionTypes: false
 	polluteScopeWithLoopInitialAssignments: false
@@ -19,12 +21,6 @@ parameters:
 	memoryLimitFile: %tmpDir%/.memory_limit
 
 services:
-	-
-		class: Nette\Caching\Cache
-		arguments:
-			storage: @cachingStorage
-			namespace: PHPStan
-
 	-
 		class: PhpParser\BuilderFactory
 
@@ -64,6 +60,11 @@ services:
 
 	-
 		class: PHPStan\Broker\BrokerFactory
+
+	-
+		class: PHPStan\Cache\Cache
+		arguments:
+			storage: @cacheStorage
 
 	-
 		class: PHPStan\Command\AnalyseApplication
@@ -118,12 +119,19 @@ services:
 		class: PHPStan\Rules\FunctionCallParametersCheck
 		arguments:
 			checkArgumentTypes: %checkFunctionArgumentTypes%
+			checkArgumentsPassedByReference: %checkArgumentsPassedByReference%
 
 	-
 		class: PHPStan\Rules\FunctionDefinitionCheck
 
 	-
 		class: PHPStan\Rules\FunctionReturnTypeCheck
+
+	-
+		class: PHPStan\Rules\Properties\PropertyDescriptor
+
+	-
+		class: PHPStan\Rules\Properties\PropertyReflectionFinder
 
 	-
 		class: PHPStan\Rules\RegistryFactory
@@ -143,10 +151,10 @@ services:
 		class: PHPStan\Broker\Broker
 		factory: @PHPStan\Broker\BrokerFactory::create
 
-	cachingStorage:
-		class: Nette\Caching\Storages\FileStorage
+	cacheStorage:
+		class: PHPStan\Cache\FileCacheStorage
 		arguments:
-			dir: %tmpDir%/cache
+			directory: %tmpDir%/cache/PHPStan
 		autowired: no
 
 	directParser:

@@ -13,7 +13,7 @@ class CallToFunctionParametersRuleTest extends \PHPStan\Rules\AbstractRuleTest
 		$broker = $this->createBroker();
 		return new CallToFunctionParametersRule(
 			$broker,
-			new FunctionCallParametersCheck($broker, new RuleLevelHelper(true), true)
+			new FunctionCallParametersCheck($broker, new RuleLevelHelper(true), true, true)
 		);
 	}
 
@@ -58,17 +58,32 @@ class CallToFunctionParametersRuleTest extends \PHPStan\Rules\AbstractRuleTest
 				6,
 			],
 			[
+				'Parameter #3 ...$foo of function FunctionWithVariadicParameters\foo expects int, null given.',
+				12,
+			],
+			[
 				'Function FunctionWithVariadicParameters\bar invoked with 0 parameters, at least 1 required.',
-				10,
+				14,
+			],
+		]);
+	}
+
+	/**
+	 * @requires PHP 7.1.0
+	 */
+	public function testCallToFunctionWithNullableDynamicParameters()
+	{
+		require_once __DIR__ . '/data/function-with-nullable-variadic-parameters-definition.php';
+		$this->analyse([__DIR__ . '/data/function-with-nullable-variadic-parameters.php'], [
+			[
+				'Function FunctionWithNullableVariadicParameters\foo invoked with 0 parameters, at least 1 required.',
+				6,
 			],
 		]);
 	}
 
 	public function testCallToFunctionWithDynamicIterableParameters()
 	{
-		if (self::isObsoletePhpParserVersion()) {
-			$this->markTestSkipped('Test requires PHP-Parser ^3.0.0');
-		}
 		require_once __DIR__ . '/data/function-with-variadic-parameters-definition.php';
 		$this->analyse([__DIR__ . '/data/function-with-variadic-parameters-7.1.php'], [
 			[
@@ -174,6 +189,18 @@ class CallToFunctionParametersRuleTest extends \PHPStan\Rules\AbstractRuleTest
 				33,
 			],
 		]);
+	}
+
+	public function testVariableIsNotNullAfterSeriesOfConditions()
+	{
+		require_once __DIR__ . '/data/variable-is-not-null-after-conditions.php';
+		$this->analyse([__DIR__ . '/data/variable-is-not-null-after-conditions.php'], []);
+	}
+
+	public function testUnionIterableTypeShouldAcceptTypeFromOtherTypes()
+	{
+		require_once __DIR__ . '/data/union-iterable-type-issue.php';
+		$this->analyse([__DIR__ . '/data/union-iterable-type-issue.php'], []);
 	}
 
 }

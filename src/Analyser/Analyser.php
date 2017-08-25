@@ -3,7 +3,6 @@
 namespace PHPStan\Analyser;
 
 use PHPStan\Broker\Broker;
-use PHPStan\File\FileExcluder;
 use PHPStan\File\FileHelper;
 use PHPStan\Parser\Parser;
 use PHPStan\Rules\Registry;
@@ -42,11 +41,6 @@ class Analyser
 	private $typeSpecifier;
 
 	/**
-	 * @var \PHPStan\File\FileExcluder
-	 */
-	private $fileExcluder;
-
-	/**
 	 * @var string[]
 	 */
 	private $ignoreErrors;
@@ -68,7 +62,6 @@ class Analyser
 	 * @param \PHPStan\Analyser\NodeScopeResolver $nodeScopeResolver
 	 * @param \PhpParser\PrettyPrinter\Standard $printer
 	 * @param \PHPStan\Analyser\TypeSpecifier $typeSpecifier
-	 * @param \PHPStan\File\FileExcluder $fileExcluder
 	 * @param \PHPStan\File\FileHelper $fileHelper
 	 * @param string[] $ignoreErrors
 	 * @param string|null $bootstrapFile
@@ -81,7 +74,6 @@ class Analyser
 		NodeScopeResolver $nodeScopeResolver,
 		\PhpParser\PrettyPrinter\Standard $printer,
 		TypeSpecifier $typeSpecifier,
-		FileExcluder $fileExcluder,
 		FileHelper $fileHelper,
 		array $ignoreErrors,
 		string $bootstrapFile = null,
@@ -94,7 +86,6 @@ class Analyser
 		$this->nodeScopeResolver = $nodeScopeResolver;
 		$this->printer = $printer;
 		$this->typeSpecifier = $typeSpecifier;
-		$this->fileExcluder = $fileExcluder;
 		$this->ignoreErrors = $ignoreErrors;
 		$this->bootstrapFile = $bootstrapFile !== null ? $fileHelper->normalizePath($bootstrapFile) : null;
 		$this->reportUnmatchedIgnoredErrors = $reportUnmatchedIgnoredErrors;
@@ -138,14 +129,6 @@ class Analyser
 		$this->nodeScopeResolver->setAnalysedFiles($files);
 		foreach ($files as $file) {
 			try {
-				if ($this->fileExcluder->isExcludedFromAnalysing($file)) {
-					if ($progressCallback !== null) {
-						$progressCallback($file);
-					}
-
-					continue;
-				}
-
 				$fileErrors = [];
 				$this->nodeScopeResolver->processNodes(
 					$this->parser->parseFile($file),
@@ -180,9 +163,9 @@ class Analyser
 		}
 
 		$unmatchedIgnoredErrors = $this->ignoreErrors;
-		$errors = array_values(array_filter($errors, function (string $error) use (&$unmatchedIgnoredErrors): bool {
+		$errors = array_values(array_filter($errors, function (Error $error) use (&$unmatchedIgnoredErrors): bool {
 			foreach ($this->ignoreErrors as $i => $ignore) {
-				if (\Nette\Utils\Strings::match($error, $ignore) !== null) {
+				if (\Nette\Utils\Strings::match($error->getMessage(), $ignore) !== null) {
 					unset($unmatchedIgnoredErrors[$i]);
 					return false;
 				}

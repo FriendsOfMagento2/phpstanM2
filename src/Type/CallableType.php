@@ -2,6 +2,8 @@
 
 namespace PHPStan\Type;
 
+use PHPStan\TrinaryLogic;
+
 class CallableType implements Type
 {
 
@@ -56,11 +58,11 @@ class CallableType implements Type
 			return true;
 		}
 
-		if ($type instanceof UnionType) {
-			return UnionTypeHelper::acceptsAll($this, $type);
+		if ($type instanceof CompoundType) {
+			return CompoundTypeHelper::accepts($type, $this);
 		}
 
-		return $type instanceof MixedType;
+		return false;
 	}
 
 	public function describe(): string
@@ -83,9 +85,9 @@ class CallableType implements Type
 		return true;
 	}
 
-	public function isIterable(): int
+	public function isIterable(): TrinaryLogic
 	{
-		return self::RESULT_MAYBE;
+		return TrinaryLogic::createMaybe();
 	}
 
 	public function getIterableKeyType(): Type
@@ -96,6 +98,11 @@ class CallableType implements Type
 	public function getIterableValueType(): Type
 	{
 		return new MixedType();
+	}
+
+	public static function __set_state(array $properties): Type
+	{
+		return new self();
 	}
 
 }

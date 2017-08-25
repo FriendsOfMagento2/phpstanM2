@@ -2,6 +2,8 @@
 
 namespace PHPStan\Type;
 
+use PHPStan\TrinaryLogic;
+
 class StringType implements Type
 {
 
@@ -22,9 +24,9 @@ class StringType implements Type
 		return false;
 	}
 
-	public function isIterable(): int
+	public function isIterable(): TrinaryLogic
 	{
-		return self::RESULT_NO;
+		return TrinaryLogic::createNo();
 	}
 
 	public function getIterableKeyType(): Type
@@ -35,6 +37,11 @@ class StringType implements Type
 	public function getIterableValueType(): Type
 	{
 		return new ErrorType();
+	}
+
+	public static function __set_state(array $properties): Type
+	{
+		return new self();
 	}
 
 }

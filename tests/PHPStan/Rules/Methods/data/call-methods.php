@@ -218,3 +218,69 @@ function () {
 	$domDocument->saveHTML(new \DOMNode());
 	$domDocument->saveHTML(null);
 };
+
+class ReturningSomethingFromConstructor
+{
+
+	public function __construct()
+	{
+		return new Foo();
+	}
+
+}
+
+function () {
+	$obj = new ReturningSomethingFromConstructor();
+	$foo = $obj->__construct();
+};
+
+class IssueWithEliminatingTypes
+{
+
+	public function doBar()
+	{
+		/** @var \DateTimeImmutable|null $date */
+		$date = makeDate();
+		if ($date !== null) {
+			return;
+		}
+
+		if (something()) {
+			$date = 'foo';
+		} else {
+			$date = 1;
+		}
+
+		echo $date->foo(); // is surely string|int
+	}
+
+}
+
+interface FirstInterface
+{
+
+	public function firstMethod();
+
+}
+
+interface SecondInterface
+{
+
+	public function secondMethod();
+
+}
+
+class UnionInsteadOfIntersection
+{
+
+	public function doFoo($object)
+	{
+		while ($object instanceof FirstInterface && $object instanceof SecondInterface) {
+			$object->firstMethod();
+			$object->secondMethod();
+			$object->firstMethod(1); // call not checked yet
+			$object->secondMethod(1); // call not checked yet
+		}
+	}
+
+}

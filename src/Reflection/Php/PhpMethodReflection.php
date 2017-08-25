@@ -4,6 +4,7 @@ namespace PHPStan\Reflection\Php;
 
 use PhpParser\Node\Stmt\ClassMethod;
 use PHPStan\Broker\Broker;
+use PHPStan\Cache\Cache;
 use PHPStan\Parser\FunctionCallStatementFinder;
 use PHPStan\Parser\Parser;
 use PHPStan\Reflection\ClassReflection;
@@ -17,6 +18,7 @@ use PHPStan\Type\StringType;
 use PHPStan\Type\Type;
 use PHPStan\Type\TypeCombinator;
 use PHPStan\Type\TypehintHelper;
+use PHPStan\Type\VoidType;
 
 class PhpMethodReflection implements MethodReflection
 {
@@ -36,7 +38,7 @@ class PhpMethodReflection implements MethodReflection
 	/** @var \PHPStan\Parser\FunctionCallStatementFinder */
 	private $functionCallStatementFinder;
 
-	/** @var \Nette\Caching\Cache */
+	/** @var \PHPStan\Cache\Cache */
 	private $cache;
 
 	/** @var \PHPStan\Type\Type[] */
@@ -57,7 +59,7 @@ class PhpMethodReflection implements MethodReflection
 		Broker $broker,
 		Parser $parser,
 		FunctionCallStatementFinder $functionCallStatementFinder,
-		\Nette\Caching\Cache $cache,
+		Cache $cache,
 		array $phpDocParameterTypes,
 		Type $phpDocReturnType = null
 	)
@@ -105,7 +107,43 @@ class PhpMethodReflection implements MethodReflection
 
 	public function getName(): string
 	{
-		return $this->reflection->getName();
+		$name = $this->reflection->getName();
+		$lowercaseName = strtolower($name);
+		if ($lowercaseName === $name) {
+			// fix for https://bugs.php.net/bug.php?id=74939
+			foreach ($this->getDeclaringClass()->getNativeReflection()->getTraitAliases() as $traitTarget) {
+				$correctName = $this->getMethodNameWithCorrectCase($name, $traitTarget);
+				if ($correctName !== null) {
+					$name = $correctName;
+					break;
+				}
+			}
+		}
+
+		return $name;
+	}
+
+	/**
+	 * @param string $lowercaseMethodName
+	 * @param string $traitTarget
+	 * @return string|null
+	 */
+	private function getMethodNameWithCorrectCase(string $lowercaseMethodName, string $traitTarget)
+	{
+		list ($trait, $method) = explode('::', $traitTarget);
+		$traitReflection = $this->broker->getClass($trait)->getNativeReflection();
+		foreach ($traitReflection->getTraitAliases() as $methodAlias => $traitTarget) {
+			if ($lowercaseMethodName === strtolower($methodAlias)) {
+				return $methodAlias;
+			}
+
+			$correctName = $this->getMethodNameWithCorrectCase($lowercaseMethodName, $traitTarget);
+			if ($correctName !== null) {
+				return $correctName;
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -285,7 +323,7 @@ class PhpMethodReflection implements MethodReflection
 		}
 
 		if (!$isNativelyVariadic && $this->declaringClass->getNativeReflection()->getFileName() !== false) {
-			$key = sprintf('variadic-method-%s-%s-v2', $this->declaringClass->getName(), $this->reflection->getName());
+			$key = sprintf('variadic-method-%s-%s-v0', $this->declaringClass->getName(), $this->reflection->getName());
 			$cachedResult = $this->cache->load($key);
 			if ($cachedResult === null) {
 				$nodes = $this->parser->parseFile($this->declaringClass->getNativeReflection()->getFileName());
@@ -359,6 +397,9 @@ class PhpMethodReflection implements MethodReflection
 	public function getReturnType(): Type
 	{
 		if ($this->returnType === null) {
+			if ($this->getName() === '__construct') {
+				return $this->returnType = new VoidType();
+			}
 			$returnType = $this->reflection->getReturnType();
 			$phpDocReturnType = $this->phpDocReturnType;
 			if (

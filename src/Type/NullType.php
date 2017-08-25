@@ -2,6 +2,8 @@
 
 namespace PHPStan\Type;
 
+use PHPStan\TrinaryLogic;
+
 class NullType implements Type
 {
 
@@ -28,7 +30,15 @@ class NullType implements Type
 
 	public function accepts(Type $type): bool
 	{
-		return $type instanceof self || $type instanceof MixedType;
+		if ($type instanceof self) {
+			return true;
+		}
+
+		if ($type instanceof CompoundType) {
+			return CompoundTypeHelper::accepts($type, $this);
+		}
+
+		return false;
 	}
 
 	public function describe(): string
@@ -51,9 +61,9 @@ class NullType implements Type
 		return true;
 	}
 
-	public function isIterable(): int
+	public function isIterable(): TrinaryLogic
 	{
-		return self::RESULT_NO;
+		return TrinaryLogic::createNo();
 	}
 
 	public function getIterableKeyType(): Type
@@ -64,6 +74,11 @@ class NullType implements Type
 	public function getIterableValueType(): Type
 	{
 		return new ErrorType();
+	}
+
+	public static function __set_state(array $properties): Type
+	{
+		return new self();
 	}
 
 }

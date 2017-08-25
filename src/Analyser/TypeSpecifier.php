@@ -3,6 +3,7 @@
 namespace PHPStan\Analyser;
 
 use PhpParser\Node;
+use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use PhpParser\Node\Expr\BinaryOp\BooleanOr;
 use PhpParser\Node\Expr\ConstFetch;
@@ -11,6 +12,7 @@ use PhpParser\Node\Expr\Instanceof_;
 use PhpParser\Node\Name;
 use PHPStan\Type\ArrayType;
 use PHPStan\Type\CallableType;
+use PHPStan\Type\CommonUnionType;
 use PHPStan\Type\FalseBooleanType;
 use PHPStan\Type\FloatType;
 use PHPStan\Type\IntegerType;
@@ -21,15 +23,12 @@ use PHPStan\Type\ObjectType;
 use PHPStan\Type\ResourceType;
 use PHPStan\Type\StaticType;
 use PHPStan\Type\StringType;
+use PHPStan\Type\TrueBooleanType;
 use PHPStan\Type\TrueOrFalseBooleanType;
 use PHPStan\Type\Type;
 
 class TypeSpecifier
 {
-
-	const SOURCE_UNKNOWN = 0;
-	const SOURCE_FROM_AND = 1;
-	const SOURCE_FROM_OR = 2;
 
 	/**
 	 * @var \PhpParser\PrettyPrinter\Standard
@@ -41,13 +40,7 @@ class TypeSpecifier
 		$this->printer = $printer;
 	}
 
-	public function specifyTypesInCondition(
-		SpecifiedTypes $types,
-		Scope $scope,
-		Node $expr,
-		bool $negated = false,
-		int $source = self::SOURCE_UNKNOWN
-	): SpecifiedTypes
+	public function specifyTypesInCondition(Scope $scope, Expr $expr, bool $negated = false): SpecifiedTypes
 	{
 		if ($expr instanceof Instanceof_ && $expr->class instanceof Name) {
 			$class = (string) $expr->class;
@@ -59,33 +52,42 @@ class TypeSpecifier
 				$type = new ObjectType($class);
 			}
 
-			return $this->apply($types, $expr->expr, $negated, $source, $type);
+			return $this->create($expr->expr, $type, $negated);
 		} elseif ($expr instanceof Node\Expr\BinaryOp\Identical) {
 			$expressions = $this->findTypeExpressionsFromBinaryOperation($expr);
-			if ($expressions === null) {
-				return $types;
+			if ($expressions !== null) {
+				$constantName = strtolower((string) $expressions[1]->name);
+				if ($constantName === 'false') {
+					$types = $this->specifyTypesInCondition($scope, $expressions[0], !$negated);
+					return $types->unionWith($this->create($expressions[0], new FalseBooleanType(), $negated));
+				} elseif ($constantName === 'true') {
+					$types = $this->specifyTypesInCondition($scope, $expressions[0], $negated);
+					return $types->unionWith($this->create($expressions[0], new TrueBooleanType(), $negated));
+				} elseif ($constantName === 'null') {
+					return $this->create($expressions[0], new NullType(), $negated);
+				}
 			}
-			if (!in_array(strtolower((string) $expressions[1]->name), [
-				'null',
-				'true',
-				'false',
-			], true)) {
-				return $types;
-			}
-			$sureType = $scope->getType($expressions[1]);
-			return $this->apply($types, $expressions[0], $negated, $source, $sureType);
 		} elseif ($expr instanceof Node\Expr\BinaryOp\NotIdentical) {
 			return $this->specifyTypesInCondition(
-				$types,
 				$scope,
-				new Node\Expr\BooleanNot(
-					new Node\Expr\BinaryOp\Identical(
-						$expr->left,
-						$expr->right
-					)
-				),
-				$negated,
-				$source
+				new Node\Expr\BinaryOp\Identical($expr->left, $expr->right),
+				!$negated
+			);
+		} elseif ($expr instanceof Node\Expr\BinaryOp\Equal) {
+			$expressions = $this->findTypeExpressionsFromBinaryOperation($expr);
+			if ($expressions !== null) {
+				$constantName = strtolower((string) $expressions[1]->name);
+				if ($constantName === 'false') {
+					return $this->specifyTypesInCondition($scope, $expressions[0], !$negated);
+				} elseif ($constantName === 'true') {
+					return $this->specifyTypesInCondition($scope, $expressions[0], $negated);
+				}
+			}
+		} elseif ($expr instanceof Node\Expr\BinaryOp\NotEqual) {
+			return $this->specifyTypesInCondition(
+				$scope,
+				new Node\Expr\BinaryOp\Equal($expr->left, $expr->right),
+				!$negated
 			);
 		} elseif (
 			$expr instanceof FuncCall
@@ -124,52 +126,32 @@ class TypeSpecifier
 			}
 
 			if ($specifiedType !== null) {
-				return $this->apply($types, $argumentExpression, $negated, $source, $specifiedType);
+				return $this->create($argumentExpression, $specifiedType, $negated);
 			}
 		} elseif ($expr instanceof BooleanAnd) {
-			if ($source !== self::SOURCE_FROM_OR) {
-				$types = $this->specifyTypesInCondition($types, $scope, $expr->left, $negated, self::SOURCE_FROM_AND);
-				$types = $this->specifyTypesInCondition($types, $scope, $expr->right, $negated, self::SOURCE_FROM_AND);
-			}
-
+			$leftTypes = $this->specifyTypesInCondition($scope, $expr->left, $negated);
+			$rightTypes = $this->specifyTypesInCondition($scope, $expr->right, $negated);
+			return $negated ? $leftTypes->intersectWith($rightTypes) : $leftTypes->unionWith($rightTypes);
 		} elseif ($expr instanceof BooleanOr) {
-			if ($source !== self::SOURCE_FROM_AND) {
-				if ($negated) {
-					$types = $this->specifyTypesInCondition($types, $scope, $expr->left, $negated, self::SOURCE_FROM_OR);
-					$types = $this->specifyTypesInCondition($types, $scope, $expr->right, $negated, self::SOURCE_FROM_OR);
-				} else {
-					$leftTypes = $this->specifyTypesInCondition($types, $scope, $expr->left, $negated, $source);
-					$rightTypes = $this->specifyTypesInCondition($types, $scope, $expr->right, $negated, $source);
-					$types = $leftTypes->unionWith($rightTypes);
-				}
-			}
-
+			$leftTypes = $this->specifyTypesInCondition($scope, $expr->left, $negated);
+			$rightTypes = $this->specifyTypesInCondition($scope, $expr->right, $negated);
+			return $negated ? $leftTypes->unionWith($rightTypes) : $leftTypes->intersectWith($rightTypes);
 		} elseif ($expr instanceof Node\Expr\BooleanNot) {
-			if ($source === self::SOURCE_FROM_AND) {
-				$types = $this->specifyTypesInCondition($types, $scope, $expr->expr, !$negated, self::SOURCE_FROM_OR);
-			} elseif ($source === self::SOURCE_FROM_OR) {
-				$types = $this->specifyTypesInCondition($types, $scope, $expr->expr, !$negated, self::SOURCE_FROM_AND);
-			} else {
-				$types = $this->specifyTypesInCondition($types, $scope, $expr->expr, !$negated, $source);
+			return $this->specifyTypesInCondition($scope, $expr->expr, !$negated);
+		} elseif ($negated) {
+			$className = $scope->getType($expr)->getClass();
+			if ($className !== null) {
+				return $this->create($expr, new ObjectType($className), true);
 			}
-
-		} elseif ($expr instanceof Node\Expr\Variable && is_string($expr->name)) {
-			if ($negated && $source !== self::SOURCE_FROM_AND) {
-				if ($scope->hasVariableType($expr->name)) {
-					$className = $scope->getVariableType($expr->name)->getClass();
-					if ($className !== null) {
-						$printedExpr = $this->printer->prettyPrintExpr($expr);
-						$types = $types->addSureNotType($expr, $printedExpr, new ObjectType($className));
-					}
-				}
-			} elseif (!$negated && $source !== self::SOURCE_FROM_OR) {
-				$printedExpr = $this->printer->prettyPrintExpr($expr);
-				$types = $types->addSureNotType($expr, $printedExpr, new NullType());
-				$types = $types->addSureNotType($expr, $printedExpr, new FalseBooleanType());
-			}
+		} else {
+			return $this->create(
+				$expr,
+				new CommonUnionType([new NullType(), new FalseBooleanType()]),
+				true
+			);
 		}
 
-		return $types;
+		return new SpecifiedTypes();
 	}
 
 	/**
@@ -187,17 +169,28 @@ class TypeSpecifier
 		return null;
 	}
 
-	private function apply(SpecifiedTypes $types, Node\Expr $expr, bool $negated, int $source, Type $type): SpecifiedTypes
+	private function create(Expr $expr, Type $type, bool $negated): SpecifiedTypes
 	{
-		$printedExpr = $this->printer->prettyPrintExpr($expr);
+		$sureTypes = [];
+		$sureNotTypes = [];
 
-		if ($negated && $source !== self::SOURCE_FROM_AND) {
-			$types = $types->addSureNotType($expr, $printedExpr, $type);
-		} elseif (!$negated && $source !== self::SOURCE_FROM_OR) {
-			$types = $types->addSureType($expr, $printedExpr, $type);
+		if ($expr instanceof Node\Expr\Variable
+			|| $expr instanceof Node\Expr\FuncCall
+			|| $expr instanceof Node\Expr\MethodCall
+			|| $expr instanceof Node\Expr\StaticCall
+			|| $expr instanceof Node\Expr\PropertyFetch
+			|| $expr instanceof Node\Expr\StaticPropertyFetch
+			|| $expr instanceof Node\Expr\ArrayDimFetch
+		) {
+			$exprString = $this->printer->prettyPrintExpr($expr);
+			if ($negated) {
+				$sureNotTypes[$exprString] = [$expr, $type];
+			} else {
+				$sureTypes[$exprString] = [$expr, $type];
+			}
 		}
 
-		return $types;
+		return new SpecifiedTypes($sureTypes, $sureNotTypes);
 	}
 
 }

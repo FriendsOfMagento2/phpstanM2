@@ -2,6 +2,8 @@
 
 namespace PHPStan\Type;
 
+use PHPStan\TrinaryLogic;
+
 trait JustNullableTypeTrait
 {
 
@@ -38,11 +40,11 @@ trait JustNullableTypeTrait
 			return true;
 		}
 
-		if ($type instanceof UnionType) {
-			return UnionTypeHelper::acceptsAll($this, $type);
+		if ($type instanceof CompoundType) {
+			return CompoundTypeHelper::accepts($type, $this);
 		}
 
-		return $type instanceof MixedType;
+		return false;
 	}
 
 	public function isDocumentableNatively(): bool
@@ -50,9 +52,9 @@ trait JustNullableTypeTrait
 		return true;
 	}
 
-	public function isIterable(): int
+	public function isIterable(): TrinaryLogic
 	{
-		return self::RESULT_NO;
+		return TrinaryLogic::createNo();
 	}
 
 	public function getIterableKeyType(): Type
