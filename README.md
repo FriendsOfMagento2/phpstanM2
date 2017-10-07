@@ -1,3 +1,10 @@
+# PHPStan for Magento 2
+
+This is an altered version of PHPStan to make it work with Magento 2 phtml files.
+
+Download the phar file: [phpstanM2](build/phpstanM2.phar)
+
+
 # PHPStan - PHP Static Analysis Tool
 
 [![Build Status](https://travis-ci.org/phpstan/phpstan.svg)](https://travis-ci.org/phpstan/phpstan)
